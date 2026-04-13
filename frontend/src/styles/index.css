@@ -1,0 +1,260 @@
+@import "tailwindcss";
+
+/* ═══════════════════════════════════════════════════════════════ */
+/* CUSTOM PROPERTIES */
+/* ═══════════════════════════════════════════════════════════════ */
+
+@layer base {
+  :root {
+    --color-critical: #dc3545;
+    --color-warning: #ffc107;
+    --color-unknown: #17a2b8;
+    --color-benign: #28a745;
+    
+    --layer-0: #6f42c1;
+    --layer-1: #28a745;
+    --layer-2: #fd7e14;
+    --layer-3: #0d6efd;
+    --layer-4: #198754;
+    --layer-5: #6c757d;
+  }
+
+  body {
+    @apply bg-gray-100 text-gray-900 font-sans;
+  }
+
+  h1 {
+    @apply text-4xl font-bold text-gray-900 mb-2;
+  }
+
+  h2 {
+    @apply text-3xl font-bold text-gray-800 mb-4;
+  }
+
+  h3 {
+    @apply text-2xl font-semibold text-gray-800 mb-3;
+  }
+
+  h4 {
+    @apply text-lg font-semibold text-gray-700 mb-2;
+  }
+
+  input, select, textarea {
+    @apply border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent;
+  }
+}
+
+@layer components {
+  /* ═══════════════════════════════════════════════════════════════ */
+  /* METRIC CARDS (Primary) */
+  /* ═══════════════════════════════════════════════════════════════ */
+
+  .metric-card {
+    @apply bg-white rounded p-4 border-l-4 border-green-500 shadow-sm hover:shadow-md transition-all;
+  }
+
+  .metric-label {
+    @apply text-gray-600 text-sm font-medium mb-2;
+  }
+
+  .metric-value {
+    @apply text-4xl font-bold text-gray-900;
+  }
+
+  .metric-subtext {
+    @apply text-gray-500 text-xs mt-1;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════ */
+  /* BUTTONS */
+  /* ═══════════════════════════════════════════════════════════════ */
+
+  .btn-primary {
+    @apply px-4 py-2 bg-green-600 text-white rounded font-medium hover:bg-green-700 active:bg-green-800 transition-all cursor-pointer;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-gray-300 text-gray-900 rounded font-medium hover:bg-gray-400 transition-all cursor-pointer;
+  }
+
+  .btn-success {
+    @apply px-4 py-2 bg-green-600 text-white rounded font-medium hover:bg-green-700 transition-all cursor-pointer;
+  }
+
+  .btn-warning {
+    @apply px-4 py-2 bg-yellow-500 text-black rounded font-medium hover:bg-yellow-600 transition-all cursor-pointer;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2 bg-red-600 text-white rounded font-medium hover:bg-red-700 transition-all cursor-pointer;
+  }
+
+  .btn-sm {
+    @apply px-2 py-1 text-sm;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════ */
+  /* CARDS */
+  /* ═══════════════════════════════════════════════════════════════ */
+
+  .card {
+    @apply bg-white rounded shadow-sm p-6 border border-gray-200 hover:shadow-md transition-all;
+  }
+
+  .card-dark {
+    @apply bg-gray-800 text-white rounded shadow-lg p-6;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════ */
+  /* BADGES */
+  /* ═══════════════════════════════════════════════════════════════ */
+
+  .badge {
+    @apply inline-block px-3 py-1 rounded-full text-sm font-semibold;
+  }
+
+  .badge-critical {
+    @apply badge bg-red-100 text-red-800;
+  }
+
+  .badge-warning {
+    @apply badge bg-yellow-100 text-yellow-800;
+  }
+
+  .badge-unknown {
+    @apply badge bg-blue-100 text-blue-800;
+  }
+
+  .badge-benign {
+    @apply badge bg-green-100 text-green-800;
+  }
+
+  .badge-green {
+    @apply badge bg-green-100 text-green-800;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════ */
+  /* TABLES */
+  /* ═══════════════════════════════════════════════════════════════ */
+
+  .table {
+    @apply w-full border-collapse;
+  }
+
+  .table th {
+    @apply bg-gray-100 px-4 py-3 text-left font-semibold text-gray-700 border-b border-gray-300 text-sm;
+  }
+
+  .table td {
+    @apply px-4 py-3 border-b border-gray-200 text-sm;
+  }
+
+  .table tbody tr {
+    @apply hover:bg-gray-50 transition-colors;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════ */
+  /* GRID ITEMS (Node Types, Edge Types) */
+  /* ═══════════════════════════════════════════════════════════════ */
+
+  .grid-item {
+    @apply bg-white rounded p-4 text-center border border-gray-200 shadow-sm hover:shadow-md transition-all;
+  }
+
+  .grid-item-value {
+    @apply text-3xl font-bold text-gray-900 mb-2;
+  }
+
+  .grid-item-label {
+    @apply text-gray-600 text-sm font-medium;
+  }
+
+  .grid-item-colored {
+    @apply text-blue-600 font-semibold text-sm;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════ */
+  /* LOADING */
+  /* ═══════════════════════════════════════════════════════════════ */
+
+  .spinner {
+    @apply inline-block w-4 h-4 border-2 border-gray-300 border-t-green-600 rounded-full animate-spin;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════ */
+  /* SEVERITY COLORS */
+  /* ═══════════════════════════════════════════════════════════════ */
+
+  .severity-critical {
+    @apply border-l-4 border-red-500 bg-red-50 rounded;
+  }
+
+  .severity-warning {
+    @apply border-l-4 border-yellow-500 bg-yellow-50 rounded;
+  }
+
+  .severity-unknown {
+    @apply border-l-4 border-blue-500 bg-blue-50 rounded;
+  }
+
+  .severity-benign {
+    @apply border-l-4 border-green-500 bg-green-50 rounded;
+  }
+
+  /* ═══════════════════════════════════════════════════════════���═══ */
+  /* LAYOUT UTILITIES */
+  /* ═══════════════════════════════════════════════════════════════ */
+
+  .grid-auto {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4;
+  }
+
+  .grid-2 {
+    @apply grid grid-cols-1 md:grid-cols-2 gap-6;
+  }
+
+  .grid-3 {
+    @apply grid grid-cols-1 md:grid-cols-3 gap-4;
+  }
+
+  .section-header {
+    @apply text-2xl font-bold text-gray-900 mb-4;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════ */
+  /* ANIMATIONS */
+  /* ═══════════════════════════════════════════════════════════════ */
+
+  @keyframes slide-in {
+    from {
+      transform: translateX(-100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+
+  .animate-slide-in {
+    animation: slide-in 0.3s ease-out;
+  }
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-out;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { @apply shadow-lg; }
+    50% { @apply shadow-xl; }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s infinite;
+  }
+}

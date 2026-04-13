@@ -1,0 +1,14 @@
+/* Tailwind is handling our variables now */
+:root {
+  --color-critical: #dc3545;
+  --color-warning: #ffc107;
+  --color-unknown: #17a2b8;
+  --color-benign: #28a745;
+  
+  --layer-0: #6f42c1;
+  --layer-1: #0dcaf0;
+  --layer-2: #fd7e14;
+  --layer-3: #0d6efd;
+  --layer-4: #198754;
+  --layer-5: #6c757d;
+}

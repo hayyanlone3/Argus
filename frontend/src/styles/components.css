@@ -1,0 +1,70 @@
+@layer components {
+  /* Buttons */
+  .btn-primary {
+    @apply px-4 py-2 bg-critical text-white rounded-lg font-medium hover:bg-red-600 active:bg-red-700 transition-all duration-200 cursor-pointer;
+  }
+
+  .btn-secondary {
+    @apply px-4 py-2 bg-gray-300 text-gray-900 rounded-lg font-medium hover:bg-gray-400 transition-all duration-200 cursor-pointer;
+  }
+
+  .btn-success {
+    @apply px-4 py-2 bg-benign text-white rounded-lg font-medium hover:bg-green-600 transition-all duration-200 cursor-pointer;
+  }
+
+  .btn-warning {
+    @apply px-4 py-2 bg-warning text-black rounded-lg font-medium hover:bg-yellow-500 transition-all duration-200 cursor-pointer;
+  }
+
+  .btn-sm {
+    @apply px-2 py-1 text-sm;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-white rounded-lg shadow-card hover:shadow-card-hover p-6 transition-all duration-200;
+  }
+
+  /* Badges */
+  .badge {
+    @apply inline-block px-3 py-1 rounded-full text-sm font-semibold;
+  }
+
+  .badge-critical {
+    @apply badge bg-red-100 text-red-800;
+  }
+
+  .badge-warning {
+    @apply badge bg-yellow-100 text-yellow-800;
+  }
+
+  .badge-unknown {
+    @apply badge bg-blue-100 text-blue-800;
+  }
+
+  .badge-benign {
+    @apply badge bg-green-100 text-green-800;
+  }
+
+  /* Tables */
+  .table {
+    @apply w-full border-collapse;
+  }
+
+  .table th {
+    @apply bg-gray-100 px-4 py-3 text-left font-semibold text-gray-700 border-b-2 border-gray-300;
+  }
+
+  .table td {
+    @apply px-4 py-3 border-b border-gray-200;
+  }
+
+  .table tbody tr {
+    @apply hover:bg-gray-50 transition-colors;
+  }
+
+  /* Loading */
+  .spinner {
+    @apply inline-block w-4 h-4 border-2 border-gray-300 border-t-critical rounded-full animate-spin;
+  }
+}
