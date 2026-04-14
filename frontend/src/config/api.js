@@ -1,4 +1,4 @@
-// src/config/api.js
+// // src/config/api.js
 /**
  * Axios API client configuration
  * Handles requests, interceptors, and error handling
@@ -10,7 +10,7 @@ import axios from 'axios';
 // CONFIGURATION
 // ═══════════════════════════════════════════════════════════════
 
-const API_BASE_URL = 
+const API_BASE_URL =
   typeof window !== 'undefined' && window.API_BASE_URL
     ? window.API_BASE_URL
     : 'http://localhost:8000/api';
@@ -160,3 +160,18 @@ export const checkHealth = async () => {
     return null;
   }
 };
+
+
+
+// import axios from "axios";
+
+// const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+// const API_TIMEOUT = Number(import.meta.env.VITE_API_TIMEOUT || 30000);
+
+// const apiClient = axios.create({
+//   baseURL: API_BASE_URL,
+//   timeout: API_TIMEOUT,
+//   headers: { "Content-Type": "application/json" },
+// });
+
+// export default apiClient;

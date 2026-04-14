@@ -9,18 +9,18 @@ export default function HashBinding({ value, onChange, tier }) {
   return (
     <div className="form-group">
       <label className="form-label">
-        SHA256 Hash {isRequired && <span className="text-critical">*</span>}
+        SHA256 Hash {isRequired && <span className="text-red-600">*</span>}
       </label>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className={`form-input ${!isValid ? 'border-critical' : ''}`}
+        className={`form-input ${!isValid ? 'border-red-600' : ''}`}
         placeholder="64-character SHA256 hash"
         required={isRequired}
       />
       {value && !isValid && (
-        <p className="text-critical text-xs mt-1">Invalid SHA256 hash format</p>
+        <p className="text-red-600 text-xs mt-1">Invalid SHA256 hash format</p>
       )}
       <p className="text-gray-600 text-xs mt-1">
         {tier === 1 && '(Optional for Tier 1)'}

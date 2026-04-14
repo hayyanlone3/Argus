@@ -26,7 +26,7 @@ export default function Sidebar() {
             to={item.path}
             className={`block px-4 py-3 rounded-lg transition-all duration-200 ${
               isActive(item.path)
-                ? 'bg-critical text-white font-semibold'
+                ? 'bg-red-600 text-white font-semibold'
                 : `hover:bg-gray-700 ${item.color}`
             }`}
           >

@@ -195,11 +195,11 @@ export const INCIDENT_STATUS_ICONS = {
 };
 
 export const INCIDENT_STATUS_COLORS = {
-  OPEN: 'text-critical',
+  OPEN: 'text-red-600',
   ACKNOWLEDGED: 'text-warning',
-  FP: 'text-benign',
+  FP: 'text-green-600',
   TP: 'text-unknown',
-  RESOLVED: 'text-benign',
+  RESOLVED: 'text-green-600',
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -207,8 +207,8 @@ export const INCIDENT_STATUS_COLORS = {
 // ═══════════════════════════════════════════════════════════════
 
 export const FEEDBACK_TYPES = {
-  TP: { label: 'True Positive', color: 'text-critical', icon: '⚠️' },
-  FP: { label: 'False Positive', color: 'text-benign', icon: '✅' },
+  TP: { label: 'True Positive', color: 'text-red-600', icon: '⚠️' },
+  FP: { label: 'False Positive', color: 'text-green-600', icon: '✅' },
   UNKNOWN: { label: 'Unknown', color: 'text-unknown', icon: '❓' },
 };
 

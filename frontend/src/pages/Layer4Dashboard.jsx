@@ -20,7 +20,7 @@ export default function Layer4Dashboard() {
           onClick={() => setActiveTab('quarantine')}
           className={`px-4 py-2 rounded-lg font-medium transition-all ${
             activeTab === 'quarantine'
-              ? 'bg-critical text-white'
+              ? 'bg-red-600 text-white'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
         >
@@ -30,7 +30,7 @@ export default function Layer4Dashboard() {
           onClick={() => setActiveTab('whitelist')}
           className={`px-4 py-2 rounded-lg font-medium transition-all ${
             activeTab === 'whitelist'
-              ? 'bg-critical text-white'
+              ? 'bg-red-600 text-white'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
         >
@@ -40,7 +40,7 @@ export default function Layer4Dashboard() {
           onClick={() => setActiveTab('about')}
           className={`px-4 py-2 rounded-lg font-medium transition-all ${
             activeTab === 'about'
-              ? 'bg-critical text-white'
+              ? 'bg-red-600 text-white'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
         >
@@ -108,11 +108,11 @@ export default function Layer4Dashboard() {
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-gray-50 p-3 rounded-lg">
                 <p className="text-gray-600 text-sm">Quarantine Directory</p>
-                <p className="text-lg font-bold text-critical">C:\ProgramData\ARGUS\...</p>
+                <p className="text-lg font-bold text-red-600">C:\ProgramData\ARGUS\...</p>
               </div>
               <div className="bg-gray-50 p-3 rounded-lg">
                 <p className="text-gray-600 text-sm">Auto-Isolation</p>
-                <p className="text-lg font-bold text-critical">CRITICAL severity</p>
+                <p className="text-lg font-bold text-red-600">CRITICAL severity</p>
               </div>
             </div>
           </div>

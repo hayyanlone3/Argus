@@ -40,7 +40,7 @@ export default function IncidentDetail() {
       <button onClick={() => navigate('/')} className="btn-secondary">
         ← Back
       </button>
-      <div className="card border border-critical text-critical">Error: {error}</div>
+      <div className="card border border-red-600 text-red-600">Error: {error}</div>
     </div>
   );
 
@@ -115,7 +115,7 @@ export default function IncidentDetail() {
               {incident.edges?.map((edge) => (
                 <div key={edge.id} className="bg-gray-50 p-3 rounded-lg text-xs">
                   <div className="font-mono text-gray-700 mb-1">
-                    Node {edge.source_id} → <span className="text-critical font-bold">{edge.edge_type}</span> → Node {edge.target_id}
+                    Node {edge.source_id} → <span className="text-red-600 font-bold">{edge.edge_type}</span> → Node {edge.target_id}
                   </div>
                   <p className="text-gray-500">{formatDate(edge.timestamp)}</p>
                 </div>

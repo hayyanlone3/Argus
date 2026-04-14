@@ -60,7 +60,7 @@ export default function Layer0Dashboard() {
             />
           </div>
 
-          {error && <p className="text-critical text-sm">{error}</p>}
+          {error && <p className="text-red-600 text-sm">{error}</p>}
 
           <button type="submit" disabled={analyzing} className="btn-primary w-full">
             {analyzing ? 'Analyzing...' : 'Analyze File'}

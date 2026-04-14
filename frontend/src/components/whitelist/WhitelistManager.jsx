@@ -28,7 +28,7 @@ export default function WhitelistManager() {
   }, [selectedTier]);
 
   if (loading) return <LoadingSpinner />;
-  if (error) return <div className="card border border-critical text-critical">Error: {error}</div>;
+  if (error) return <div className="card border border-red-600 text-red-600">Error: {error}</div>;
 
   const tierColors = {
     1: 'bg-green-50',
@@ -47,7 +47,7 @@ export default function WhitelistManager() {
             onClick={() => setSelectedTier(tier)}
             className={`px-3 py-1 rounded text-sm transition-all ${
               selectedTier === tier
-                ? 'bg-critical text-white'
+                ? 'bg-red-600 text-white'
                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
             }`}
           >

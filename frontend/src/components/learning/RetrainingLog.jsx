@@ -37,11 +37,11 @@ export default function RetrainingLog() {
         Automatic weekly retraining: <strong>Friday 23:00 UTC</strong>
       </p>
 
-      {error && <p className="text-critical text-sm mb-3">{error}</p>}
+      {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
 
       {result && (
         <div className={`p-3 rounded-lg border mb-3 ${
-          result.status === 'completed' ? 'border-benign bg-green-50' : 'border-critical bg-red-50'
+          result.status === 'completed' ? 'border-green-600 bg-green-50' : 'border-red-600 bg-red-50'
         }`}>
           <p className="font-semibold text-sm mb-1">Status: {result.status}</p>
           <p className="text-xs text-gray-700">{result.reason}</p>

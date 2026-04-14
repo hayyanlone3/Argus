@@ -29,7 +29,7 @@ export default function NodeDetail({ nodeId }) {
 
   if (!nodeId) return null;
   if (loading) return <LoadingSpinner />;
-  if (error) return <div className="card border border-critical text-critical">Error: {error}</div>;
+  if (error) return <div className="card border border-red-600 text-red-600">Error: {error}</div>;
 
   return (
     <div className="card">

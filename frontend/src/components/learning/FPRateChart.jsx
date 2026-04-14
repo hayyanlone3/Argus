@@ -28,7 +28,7 @@ export default function FPRateChart() {
   }, []);
 
   if (loading) return <LoadingSpinner />;
-  if (error) return <div className="card border border-critical text-critical">Error: {error}</div>;
+  if (error) return <div className="card border border-red-600 text-red-600">Error: {error}</div>;
 
   const fpRate = quality?.false_positive_rate_percent || 0;
   const status = fpRate < 5 ? '✅ Good' : fpRate < 10 ? '⚠️  Acceptable' : '❌ High';
@@ -38,17 +38,17 @@ export default function FPRateChart() {
       <h3 className="font-bold text-lg mb-4">📊 False Positive Rate</h3>
 
       <div className="text-center mb-4">
-        <div className="text-4xl font-bold text-critical mb-2">{fpRate.toFixed(1)}%</div>
+        <div className="text-4xl font-bold text-red-600 mb-2">{fpRate.toFixed(1)}%</div>
         <p className="text-sm text-gray-600">{status}</p>
       </div>
 
       <div className="grid grid-cols-3 gap-3 text-sm">
         <div className="bg-green-50 p-3 rounded-lg text-center">
-          <p className="text-2xl font-bold text-benign">{quality?.breakdown?.true_positives}</p>
+          <p className="text-2xl font-bold text-green-600">{quality?.breakdown?.true_positives}</p>
           <p className="text-xs text-gray-600">True Positives</p>
         </div>
         <div className="bg-red-50 p-3 rounded-lg text-center">
-          <p className="text-2xl font-bold text-critical">{quality?.breakdown?.false_positives}</p>
+          <p className="text-2xl font-bold text-red-600">{quality?.breakdown?.false_positives}</p>
           <p className="text-xs text-gray-600">False Positives</p>
         </div>
         <div className="bg-blue-50 p-3 rounded-lg text-center">

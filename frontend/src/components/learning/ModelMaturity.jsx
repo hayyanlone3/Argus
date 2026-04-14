@@ -28,7 +28,7 @@ export default function ModelMaturity() {
   }, []);
 
   if (loading) return <LoadingSpinner />;
-  if (error) return <div className="card border border-critical text-critical">Error: {error}</div>;
+  if (error) return <div className="card border border-red-600 text-red-600">Error: {error}</div>;
 
   const percent = progress?.model_maturity_percent || 0;
 
@@ -39,11 +39,11 @@ export default function ModelMaturity() {
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-semibold">Progress</span>
-          <span className="text-sm font-bold text-critical">{percent.toFixed(1)}%</span>
+          <span className="text-sm font-bold text-red-600">{percent.toFixed(1)}%</span>
         </div>
         <div className="w-full bg-gray-200 rounded-full h-2">
           <div
-            className="bg-critical h-2 rounded-full transition-all duration-500"
+            className="bg-red-600 h-2 rounded-full transition-all duration-500"
             style={{ width: `${percent}%` }}
           />
         </div>

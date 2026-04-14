@@ -48,7 +48,7 @@ export default function Layer2Dashboard() {
               onChange={(e) => setScore2a(e.target.value / 100)}
               className="w-full"
             />
-            <p className="text-2xl font-bold text-critical mt-2">{(score2a * 100).toFixed(0)}%</p>
+            <p className="text-2xl font-bold text-red-600 mt-2">{(score2a * 100).toFixed(0)}%</p>
           </div>
           <div className="text-xs text-gray-600 space-y-1">
             <p>• Spawn rate anomaly</p>
@@ -111,10 +111,10 @@ export default function Layer2Dashboard() {
 
         {result && (
           <div className={`p-4 rounded-lg border-2 ${
-            result.severity === 'CRITICAL' ? 'border-critical bg-red-50'
+            result.severity === 'CRITICAL' ? 'border-red-600 bg-red-50'
             : result.severity === 'WARNING' ? 'border-warning bg-yellow-50'
             : result.severity === 'UNKNOWN' ? 'border-unknown bg-blue-50'
-            : 'border-benign bg-green-50'
+            : 'border-green-600 bg-green-50'
           }`}>
             <p className="font-bold text-lg mb-1">Decision: {result.severity}</p>
             <p className="text-sm">Confidence: {(result.confidence * 100).toFixed(0)}%</p>
@@ -126,7 +126,7 @@ export default function Layer2Dashboard() {
       <div className="card">
         <h3 className="font-bold text-lg mb-4">Decision Tree</h3>
         <div className="space-y-2 text-sm">
-          <div className="border-l-4 border-critical pl-3">
+          <div className="border-l-4 border-red-600 pl-3">
             <p className="font-semibold">CRITICAL</p>
             <p className="text-gray-600 text-xs">2A AND 2C both high, OR (2A OR 2B) AND 2C high, OR injection detected</p>
           </div>
@@ -138,7 +138,7 @@ export default function Layer2Dashboard() {
             <p className="font-semibold">UNKNOWN</p>
             <p className="text-gray-600 text-xs">Multiple moderate signals, insufficient confidence</p>
           </div>
-          <div className="border-l-4 border-benign pl-3">
+          <div className="border-l-4 border-green-600 pl-3">
             <p className="font-semibold">BENIGN</p>
             <p className="text-gray-600 text-xs">No anomalies detected across channels</p>
           </div>

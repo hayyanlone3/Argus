@@ -1,1 +1,11 @@
 @import "tailwindcss";
+@import "./styles/components.css";
+
+
+@import "./styles/components.css";
+
+@layer base {
+  body {
+    @apply bg-gray-100 text-gray-900 font-sans;
+  }
+}

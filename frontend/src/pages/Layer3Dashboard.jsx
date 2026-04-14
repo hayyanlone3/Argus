@@ -47,7 +47,7 @@ export default function Layer3Dashboard() {
           </div>
           <div className="card">
             <p className="text-gray-600 text-sm mb-1">MTTI (Avg)</p>
-            <p className="text-3xl font-bold text-critical">
+            <p className="text-3xl font-bold text-red-600">
               {stats.metrics?.mean_time_to_identify_seconds
                 ? `${Math.round(stats.metrics.mean_time_to_identify_seconds / 60)}m`
                 : 'N/A'}
@@ -69,7 +69,7 @@ export default function Layer3Dashboard() {
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             {Object.entries(stats.status_distribution).map(([status, count]) => (
               <div key={status} className="bg-gray-50 p-3 rounded-lg text-center">
-                <p className="text-2xl font-bold text-critical">{count}</p>
+                <p className="text-2xl font-bold text-red-600">{count}</p>
                 <p className="text-xs text-gray-600">{status}</p>
               </div>
             ))}

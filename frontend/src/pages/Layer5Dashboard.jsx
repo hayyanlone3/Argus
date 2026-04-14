@@ -51,9 +51,9 @@ export default function Layer5Dashboard() {
 
       {/* Performance Targets */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card border-2 border-benign">
+        <div className="card border-2 border-green-600">
           <p className="text-gray-600 text-sm mb-2">FP Rate Target</p>
-          <p className="text-3xl font-bold text-benign">&lt; 5%</p>
+          <p className="text-3xl font-bold text-green-600">&lt; 5%</p>
         </div>
         <div className="card border-2 border-unknown">
           <p className="text-gray-600 text-sm mb-2">Data Quality</p>

@@ -68,7 +68,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="card">
             <p className="text-gray-600 text-sm mb-1">Model Maturity</p>
-            <p className="text-3xl font-bold text-critical mb-1">
+            <p className="text-3xl font-bold text-red-600 mb-1">
               {learningStats.weekly_stats?.data_quality_percent?.toFixed(0) || 0}%
             </p>
             <p className="text-xs text-gray-600">Analyst feedback rate</p>
@@ -98,7 +98,7 @@ export default function Dashboard() {
           onClick={() => setSelectedSeverity(null)}
           className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
             selectedSeverity === null
-              ? 'bg-critical text-white'
+              ? 'bg-red-600 text-white'
               : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           }`}
         >
@@ -110,7 +110,7 @@ export default function Dashboard() {
             onClick={() => setSelectedSeverity(sev)}
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               selectedSeverity === sev
-                ? 'bg-critical text-white'
+                ? 'bg-red-600 text-white'
                 : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
             }`}
           >

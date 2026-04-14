@@ -32,7 +32,7 @@ export default function ProvGraph() {
   }, []);
 
   if (loading) return <LoadingSpinner />;
-  if (error) return <div className="card border border-critical text-critical">Error: {error}</div>;
+  if (error) return <div className="card border border-red-600 text-red-600">Error: {error}</div>;
 
   return (
     <div className="card">
@@ -60,7 +60,7 @@ export default function ProvGraph() {
           {edges.slice(0, 10).map((edge) => (
             <div key={edge.id} className="text-xs bg-gray-50 p-2 rounded">
               <span className="font-mono">{edge.source_id}</span> →
-              <span className="font-mono text-critical ml-1">{edge.edge_type}</span> →
+              <span className="font-mono text-red-600 ml-1">{edge.edge_type}</span> →
               <span className="font-mono ml-1">{edge.target_id}</span>
             </div>
           ))}

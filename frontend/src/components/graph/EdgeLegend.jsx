@@ -6,11 +6,11 @@ export default function EdgeLegend() {
     { type: 'SPAWNED', icon: '👶', color: 'text-blue-600', desc: 'Process spawned' },
     { type: 'READ', icon: '📖', color: 'text-gray-600', desc: 'File read' },
     { type: 'WROTE', icon: '✏️', color: 'text-gray-600', desc: 'File write' },
-    { type: 'INJECTED_INTO', icon: '💉', color: 'text-critical', desc: 'Code injection' },
+    { type: 'INJECTED_INTO', icon: '💉', color: 'text-red-600', desc: 'Code injection' },
     { type: 'EXECUTED_SCRIPT', icon: '⚙️', color: 'text-warning', desc: 'Script executed' },
     { type: 'SUBSCRIBED_WMI', icon: '📡', color: 'text-unknown', desc: 'WMI subscription' },
     { type: 'MODIFIED_REG', icon: '🔧', color: 'text-warning', desc: 'Registry modified' },
-    { type: 'DISABLED_AMSI', icon: '🚫', color: 'text-critical', desc: 'AMSI disabled' },
+    { type: 'DISABLED_AMSI', icon: '🚫', color: 'text-red-600', desc: 'AMSI disabled' },
   ];
 
   return (

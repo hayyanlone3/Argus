@@ -18,8 +18,8 @@ export default class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="card border border-critical">
-          <h3 className="text-critical font-bold mb-2">❌ Error Occurred</h3>
+        <div className="card border border-red-600">
+          <h3 className="text-red-600 font-bold mb-2">❌ Error Occurred</h3>
           <p className="text-gray-600 text-sm">{this.state.error?.message}</p>
           <button
             onClick={() => this.setState({ hasError: false })}
