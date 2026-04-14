@@ -83,7 +83,7 @@ async def list_nodes(
         if node_type:
             query = query.filter(Node.type == node_type)
         
-        nodes = query.limit(limit).all()
+        nodes = query.order_by(Node.last_seen.desc()).limit(limit).all()
         return {
             "total": len(nodes),
             "nodes": [NodeResponse.from_orm(n) for n in nodes]

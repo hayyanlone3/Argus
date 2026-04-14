@@ -89,7 +89,7 @@ class LearningScheduler:
         try:
             logger.info("🔔 Weekly retraining job triggered")
             
-            db = SessionLocal()
+            db = connection.SessionLocal()
             result = RetrainingService.retrain_model(db)
             db.close()
             
@@ -104,7 +104,7 @@ class LearningScheduler:
         try:
             logger.info("🔄 Manual retraining triggered")
             
-            db = SessionLocal()
+            db = connection.SessionLocal()
             result = RetrainingService.retrain_model(db)
             db.close()
             

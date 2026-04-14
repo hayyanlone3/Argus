@@ -64,7 +64,7 @@ def verify_connection():
         logger.info("")
         logger.info("🔌 Testing database connection...")
         
-        db = SessionLocal()
+        db = connection.SessionLocal()
         db.execute(text("SELECT 1"))
         db.close()
         
@@ -85,7 +85,7 @@ def create_sample_data():
         logger.info("")
         logger.info("📝 Creating sample data...")
         
-        db = SessionLocal()
+        db = connection.SessionLocal()
         
         # Check if sample data already exists
         existing = db.query(Node).first()
