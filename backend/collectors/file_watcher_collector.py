@@ -38,8 +38,9 @@ def _safe_sha256(path: str, max_bytes: int) -> Optional[str]:
 def _session_id_for_path(path: str) -> str:
     """Simple correlation key: minute bucket + directory."""
     minute = datetime.utcnow().strftime("%Y%m%d-%H%M")
-    directory = os.path.dirname(path).lower()
-    return f"fswatch:{minute}:{directory}"
+    directory = os.path.dirname(path).lower().encode("utf-8", errors="ignore")
+    d_hash = hashlib.sha1(directory).hexdigest()[:12]  # 12 chars
+    return f"fsw:{minute}:{d_hash}"  # ~4+1+13+1+12 = under 100
 
 
 class _Handler(FileSystemEventHandler):

@@ -1,4 +1,3 @@
-# backend/layers/layer1_graph_engine/services.py
 """
 Layer 1: Graph Engine Service
 Core graph operations: create nodes, edges, query relationships
@@ -14,78 +13,73 @@ from shared.logger import setup_logger
 from config import settings
 import networkx as nx
 import uuid
+import os
+
+# NEW: automatic layer2 scoring
+from layers.layer2_scoring.auto_scoring import AutoScoringService
 
 logger = setup_logger(__name__)
 
 
 class GraphService:
     """Layer 1: Provenance Graph Engine Service"""
-    
+
     @staticmethod
     def create_or_update_node(db: Session, node_data: NodeCreate) -> Node:
-        """
-        Create node or update if exists.
-        Prevents duplicates via (type, path, hash) uniqueness.
-        
-        Args:
-            db: Database session
-            node_data: NodeCreate schema
-            
-        Returns:
-            Node object (created or updated)
-        """
         try:
-            # Check if node already exists
             existing_node = db.query(Node).filter(
                 Node.type == node_data.type,
                 Node.path == node_data.path,
                 Node.hash_sha256 == node_data.hash_sha256
             ).first()
-            
+
             if existing_node:
                 existing_node.last_seen = datetime.utcnow()
                 db.commit()
                 logger.debug(f"♻️  Updated node: {node_data.name}")
                 return existing_node
-            
-            # Create new node
+
             new_node = Node(**node_data.dict())
             new_node.first_seen = datetime.utcnow()
             new_node.last_seen = datetime.utcnow()
             db.add(new_node)
             db.commit()
             db.refresh(new_node)
-            
+
             logger.debug(f"✨ Created node: {node_data.name} (ID: {new_node.id}, Type: {node_data.type})")
             return new_node
-        
+
         except Exception as e:
             logger.error(f"❌ Failed to create/update node: {e}")
             db.rollback()
             raise
-    
+
     @staticmethod
     def create_edge(db: Session, edge_data: EdgeCreate) -> Edge:
-        """
-        Create edge between two nodes.
-        
-        Args:
-            db: Database session
-            edge_data: EdgeCreate schema
-            
-        Returns:
-            Edge object (created)
-        """
         try:
             new_edge = Edge(**edge_data.dict())
             new_edge.timestamp = datetime.utcnow()
             db.add(new_edge)
             db.commit()
             db.refresh(new_edge)
-            
-            logger.debug(f"🔗 Created edge: {edge_data.edge_type} (ID {edge_data.source_id} → {edge_data.target_id})")
+
+            logger.debug(
+                f"🔗 Created edge: {edge_data.edge_type} (ID {edge_data.source_id} → {edge_data.target_id})"
+            )
+
+            # NEW: Auto-score edge (Layer 2) in a safe, best-effort way
+            try:
+                max_mb = int(os.getenv("ARGUS_FILE_HASH_MAX_MB", "10"))
+                AutoScoringService.score_edge(
+                    db,
+                    new_edge.id,
+                    max_file_bytes=max_mb * 1024 * 1024,
+                )
+            except Exception:
+                logger.exception(f"❌ Auto scoring failed for edge_id={new_edge.id}")
+
             return new_edge
-        
+
         except Exception as e:
             logger.error(f"❌ Failed to create edge: {e}")
             db.rollback()

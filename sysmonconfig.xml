@@ -1,0 +1,13 @@
+<Sysmon schemaversion="4.91">
+  <EventFiltering>
+
+    <!-- Process Creation -->
+    <ProcessCreate onmatch="include"/>
+
+    <!-- File Creation (IMPORTANT) -->
+    <FileCreate onmatch="include">
+      <TargetFilename condition="end with">.txt</TargetFilename>
+    </FileCreate>
+
+  </EventFiltering>
+</Sysmon>

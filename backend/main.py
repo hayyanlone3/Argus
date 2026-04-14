@@ -26,6 +26,7 @@ from layers.layer5_learning.routes import router as layer5_router
 # Collectors
 from collectors.file_watcher_collector import FileWatcherCollector
 from collectors.process_snapshot_collector import ProcessSnapshotCollector
+from collectors.sysmon_collector import SysmonCollector
 
 logger = setup_logger(__name__)
 
@@ -84,6 +85,13 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Debug mode: True")
         logger.info("=" * 80)
 
+        app.state.sysmon = SysmonCollector(
+        enabled=os.getenv("ARGUS_SYSMON_ENABLED", "true").lower() == "true",
+        poll_seconds=float(os.getenv("ARGUS_SYSMON_POLL_SEC", "1.0")),
+        audit_enabled=os.getenv("ARGUS_AUDIT_ENABLED", "true").lower() == "true",
+)
+        app.state.sysmon.start()
+
     except Exception as e:
         logger.error(f"❌ Startup failed: {e}")
         sys.exit(1)
@@ -104,6 +112,10 @@ async def lifespan(app: FastAPI):
             fw.stop()
     except Exception as e:
         logger.error(f"❌ Failed to stop file watcher cleanly: {e}")
+        
+        sm = getattr(app.state, "sysmon", None)
+        if sm:
+            sm.stop()
 
     logger.info("🛑 ARGUS Backend shutting down...")
 

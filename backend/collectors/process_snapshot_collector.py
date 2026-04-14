@@ -20,7 +20,7 @@ logger = setup_logger(__name__)
 def _session_id_for_process_event(pid: int) -> str:
     # Correlate by minute bucket (simple + stable)
     minute = datetime.utcnow().strftime("%Y%m%d-%H%M")
-    return f"pssnap:{minute}:pid:{pid}"
+    return f"ps:{minute}:{pid}"
 
 
 def _safe_proc_exe(p: psutil.Process) -> Optional[str]:
