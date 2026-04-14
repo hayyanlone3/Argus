@@ -83,6 +83,24 @@ class Settings(BaseSettings):
     log_file: str = "argus_backend.log"
     
     # ═══════════════════════════════════════════════════════════════════════════════
+    # FILE-SYSTEM COLLECTOR (Plan A in-process ingestion)
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # Set COLLECTOR_ENABLED=true in .env to activate
+    collector_enabled: bool = False
+    # Comma-separated list of directories to watch.
+    # Defaults to the standard user directories resolved at runtime so the
+    # correct home directory is used on any system / username.
+    # Override via COLLECTOR_WATCHED_PATHS in .env.
+    collector_watched_paths: str = ",".join([
+        os.path.join(os.path.expanduser("~"), "Downloads"),
+        os.path.join(os.path.expanduser("~"), "Desktop"),
+        os.path.join(os.path.expanduser("~"), "Documents"),
+        os.path.join(os.path.expanduser("~"), "AppData", "Local", "Temp"),
+    ])
+    # Files larger than this (bytes) will not be SHA-256 hashed (default 10 MB)
+    collector_hash_max_bytes: int = 10_485_760
+
+    # ═══════════════════════════════════════════════════════════════════════════════
     # TESTING
     # ═══════════════════════════════════════════════════════════════════════════════
     testing: bool = False
