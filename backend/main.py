@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from shared.logger import setup_logger
 from database.connection import init_db
+from config import settings
 
 # Import all layer routers
 from layers.layer0_bouncer.routes import router as layer0_router
@@ -30,6 +31,7 @@ async def lifespan(app: FastAPI):
     """Application startup and shutdown events"""
     
     # STARTUP
+    fs_collector = None
     try:
         logger.info("=" * 80)
         logger.info("🚀 ARGUS v2.2 Backend Initializing...")
@@ -41,6 +43,20 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Database initialized successfully")
         logger.info("✅ API running on 0.0.0.0:8000")
         logger.info("✅ Debug mode: True")
+
+        # Start file-system collector (Plan A in-process ingestion)
+        if settings.collector_enabled:
+            from collectors.fs_watcher import FileSystemCollector
+            watched = [p.strip() for p in settings.collector_watched_paths.split(",") if p.strip()]
+            fs_collector = FileSystemCollector(
+                watched_paths=watched,
+                hash_max_bytes=settings.collector_hash_max_bytes,
+            )
+            fs_collector.start()
+            logger.info("✅ FileSystemCollector started")
+        else:
+            logger.info("ℹ️  FileSystemCollector disabled (set COLLECTOR_ENABLED=true to enable)")
+
         logger.info("=" * 80)
         
     except Exception as e:
@@ -51,6 +67,8 @@ async def lifespan(app: FastAPI):
     
     # SHUTDOWN
     logger.info("🛑 ARGUS Backend shutting down...")
+    if fs_collector is not None:
+        fs_collector.stop()
 
 # ═══════════════════════════════════════════════════════════════
 # FASTAPI APP
