@@ -16,12 +16,9 @@ export default function Header() {
           </div>
         </div>
 
-        <div className="text-right">
-          <p className="text-sm text-gray-300">
-            <span className="text-red-600 font-bold">Live</span> • Backend Connected
-          </p>
+        
         </div>
-      </div>
+      
     </header>
   );
 }

@@ -4,7 +4,7 @@ Layer 1: Graph Engine API Endpoints
 Provides node and edge management endpoints
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from database.connection import get_db
@@ -13,6 +13,7 @@ from database.schemas import (
     NodeCreate, EdgeCreate, NodeResponse, EdgeResponse
 )
 from .services import GraphService
+from layers.layer1_graph_engine.event_bus import event_bus
 from shared.logger import setup_logger
 import json
 import asyncio
@@ -185,6 +186,48 @@ async def list_edges(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/edges/interesting")
+async def list_interesting_edges(
+    db: Session = Depends(get_db),
+    limit: int = Query(250, ge=1, le=2000),
+    min_anomaly_score: float = Query(0.6, ge=0.0, le=1.0),
+    min_severity: str = Query("UNKNOWN"),
+):
+    """
+    Return only edges that are likely suspicious (used for incident-centric graph view).
+    """
+    try:
+        # Map severities to rank
+        rank = {"BENIGN": 0, "UNKNOWN": 1, "WARNING": 2, "CRITICAL": 3}
+        min_rank = rank.get(min_severity.upper(), 1)
+
+        edges = (
+            db.query(Edge)
+            .order_by(Edge.timestamp.desc())
+            .limit(limit)
+            .all()
+        )
+
+        # Filter in python to avoid enum/db quirks; can be optimized later
+        def sev_rank(e):
+            s = getattr(e.final_severity, "value", e.final_severity) or "BENIGN"
+            return rank.get(str(s).upper(), 0)
+
+        interesting = [
+            e for e in edges
+            if (e.anomaly_score is not None and float(e.anomaly_score) >= float(min_anomaly_score))
+            or sev_rank(e) >= min_rank
+        ]
+
+        return {
+            "total": len(interesting),
+            "edges": [EdgeResponse.from_orm(e) for e in interesting],
+        }
+    except Exception as e:
+        logger.error(f"❌ Failed to list interesting edges: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/edges/{edge_id}")
 async def get_edge(
     edge_id: int,
@@ -227,6 +270,49 @@ async def get_neighbors(
         return result
     except Exception as e:
         logger.error(f"❌ Failed to get neighbors: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/subgraph")
+async def get_subgraph(
+    seed_node_id: int = Query(..., ge=1),
+    hops: int = Query(2, ge=1, le=5),
+    limit_edges: int = Query(1000, ge=1, le=5000),
+    db: Session = Depends(get_db),
+):
+    """
+    Return a subgraph centered on seed_node_id.
+
+    Example:
+      GET /api/layer1/subgraph?seed_node_id=123&hops=2&limit_edges=1000
+
+    Returns:
+      { "seed_node_id": 123, "hops": 2, "nodes": [...], "edges": [...], "counts": {...} }
+    """
+    try:
+        neigh = GraphService.get_node_neighbors(db, seed_node_id, hops)
+        node_ids = set(neigh.get("neighbors", []))
+        node_ids.add(seed_node_id)
+
+        nodes = db.query(Node).filter(Node.id.in_(node_ids)).all()
+
+        edges_q = db.query(Edge).filter(
+            Edge.source_id.in_(node_ids),
+            Edge.target_id.in_(node_ids),
+        ).order_by(Edge.timestamp.desc()).limit(limit_edges)
+
+        edges = edges_q.all()
+
+        return {
+            "seed_node_id": seed_node_id,
+            "hops": hops,
+            "counts": {"nodes": len(nodes), "edges": len(edges)},
+            "nodes": [NodeResponse.from_orm(n) for n in nodes],
+            "edges": [EdgeResponse.from_orm(e) for e in edges],
+        }
+
+    except Exception as e:
+        logger.error(f"❌ Failed to get subgraph: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -283,25 +369,50 @@ async def get_graph_stats(db: Session = Depends(get_db)):
 
 
 @router.get("/stream")
-async def stream_graph_updates(db: Session = Depends(get_db)):
+async def stream_graph_updates(
+    request: Request,
+    suspicious_only: bool = Query(True),
+    sysmon_only: bool = Query(True),
+    min_anomaly_score: float = Query(0.6, ge=0.0, le=1.0),
+):
     """
-    Server-Sent Events stream of graph updates.
-    Frontend connects here for real-time graph changes.
-    
-    Example:
-        GET /api/layer1/stream
+    SSE stream of real Layer1 edge events.
+    Defaults:
+      - suspicious_only=true
+      - sysmon_only=true
     """
-    async def event_generator():
+    q = event_bus.subscribe()
+
+    def is_suspicious(edge: dict) -> bool:
+        sev = (edge.get("final_severity") or "").upper()
+        score = edge.get("anomaly_score") or 0.0
+        # treat UNKNOWN/WARNING/CRITICAL as interesting
+        return (sev in {"UNKNOWN", "WARNING", "CRITICAL"}) or (float(score) >= float(min_anomaly_score))
+
+    def is_sysmon(edge: dict) -> bool:
+        md = edge.get("edge_metadata") or {}
+        return md.get("collector") == "sysmon"
+
+    async def gen():
         try:
-            for i in range(60):  # Stream for 60 seconds
-                edges = GraphService.get_active_edges(db, hours=24)
-                nodes = db.query(Node).count()
-                
-                yield f"data: {json.dumps({'nodes': nodes, 'edges': len(edges), 'timestamp': str(__import__('datetime').datetime.utcnow())})}\n\n"
-                
-                await asyncio.sleep(5)  # Send update every 5 seconds
-        
-        except Exception as e:
-            logger.error(f"❌ Stream error: {e}")
-    
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+            yield f"data: {json.dumps({'type':'hello','suspicious_only':suspicious_only,'sysmon_only':sysmon_only})}\n\n"
+            while True:
+                if await request.is_disconnected():
+                    break
+                try:
+                    evt = await asyncio.wait_for(q.get(), timeout=15.0)
+
+                    if evt.get("type") == "edge_created":
+                        edge = evt.get("edge") or {}
+                        if sysmon_only and not is_sysmon(edge):
+                            continue
+                        if suspicious_only and not is_suspicious(edge):
+                            continue
+
+                    yield f"data: {json.dumps(evt)}\n\n"
+                except asyncio.TimeoutError:
+                    yield f"data: {json.dumps({'type':'ping'})}\n\n"
+        finally:
+            event_bus.unsubscribe(q)
+
+    return StreamingResponse(gen(), media_type="text/event-stream")

@@ -5,7 +5,8 @@ import EdgeLegend from './EdgeLegend';
 import D3ProvenanceGraph from './D3ProvenanceGraph';
 import NodeDetail from './NodeDetail';
 
-const DEFAULT_EDGE_TYPES = new Set([
+// All possible edge types for the UI toggle buttons
+const ALL_EDGE_TYPES = [
   "SPAWNED",
   "WROTE",
   "MODIFIED_REG",
@@ -14,41 +15,68 @@ const DEFAULT_EDGE_TYPES = new Set([
   "READ",
   "SUBSCRIBED_WMI",
   "DISABLED_AMSI",
+];
+
+// Initial state: only show process-centric edges to reduce noise
+const DEFAULT_EDGE_TYPES = new Set([
+  "SPAWNED",
+  "INJECTED_INTO",
+  "EXECUTED_SCRIPT",
+  "MODIFIED_REG",
+  // keep WROTE optional (massive)
+  // "WROTE",
 ]);
 
 export default function ProvGraph() {
-  const [nodes, setNodes] = useState([]);
-  const [edges, setEdges] = useState([]);
+  // full dataset (never mutate on node click)
+  const [allNodes, setAllNodes] = useState([]);
+  const [allEdges, setAllEdges] = useState([]);
+
+  // view dataset (changes on focus)
+  const [viewNodes, setViewNodes] = useState([]);
+  const [viewEdges, setViewEdges] = useState([]);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const [selectedNode, setSelectedNode] = useState(null);
+  const [selectedNodeId, setSelectedNodeId] = useState(null);
   const [edgeTypeFilter, setEdgeTypeFilter] = useState(DEFAULT_EDGE_TYPES);
 
-  const filteredEdges = useMemo(() => {
-    if (!edgeTypeFilter || edgeTypeFilter.size === 0) return edges;
-    return (edges || []).filter(e => edgeTypeFilter.has(e.edge_type));
-  }, [edges, edgeTypeFilter]);
+  const filteredViewEdges = useMemo(() => {
+    if (!edgeTypeFilter || edgeTypeFilter.size === 0) return viewEdges;
+    return (viewEdges || []).filter(e => edgeTypeFilter.has(e.edge_type));
+  }, [viewEdges, edgeTypeFilter]);
 
   // keep only nodes referenced by filtered edges (reduces noise)
-  const filteredNodes = useMemo(() => {
+  const filteredViewNodes = useMemo(() => {
     const ids = new Set();
-    filteredEdges.forEach(e => {
+    filteredViewEdges.forEach(e => {
       ids.add(e.source_id);
       ids.add(e.target_id);
     });
-    return (nodes || []).filter(n => ids.has(n.id));
-  }, [nodes, filteredEdges]);
+    return (viewNodes || []).filter(n => ids.has(n.id));
+  }, [viewNodes, filteredViewEdges]);
+
+  const fetchGraph = async () => {
+    const nodesData = await graphService.getNodes(250);
+    const edgesData = await graphService.getEdges(250);
+
+    const nodesArr = Array.isArray(nodesData) ? nodesData : (nodesData?.nodes || []);
+    const edgesArr = Array.isArray(edgesData) ? edgesData : (edgesData?.edges || []);
+
+    setAllNodes(nodesArr);
+    setAllEdges(edgesArr);
+
+    // default view = full
+    setViewNodes(nodesArr);
+    setViewEdges(edgesArr);
+  };
 
   useEffect(() => {
-    const fetchGraph = async () => {
+    const run = async () => {
       try {
         setLoading(true);
-        const nodesData = await graphService.getNodes(200);
-        const edgesData = await graphService.getEdges(200);
-
-        setNodes(Array.isArray(nodesData) ? nodesData : (nodesData?.nodes || []));
-        setEdges(Array.isArray(edgesData) ? edgesData : (edgesData?.edges || []));
+        await fetchGraph();
         setError(null);
       } catch (err) {
         setError(err.message);
@@ -57,9 +85,10 @@ export default function ProvGraph() {
       }
     };
 
-    fetchGraph();
-    const interval = setInterval(fetchGraph, 15000);
+    run();
+    const interval = setInterval(run, 15000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onToggleEdgeType = (t) => {
@@ -71,34 +100,37 @@ export default function ProvGraph() {
     });
   };
 
-  const onNodeClick = async (node) => {
-    setSelectedNode(node);
+  const focusNeighborhood = async (nodeId) => {
     try {
-      // Expand neighborhood subgraph around the clicked node
-      const neigh = await graphService.getNeighbors(node.id, 2);
-      const neighborIds = new Set([node.id, ...(neigh.neighbors || [])]);
+      const neigh = await graphService.getNeighbors(nodeId, 2);
+      const neighborIds = new Set([nodeId, ...(neigh.neighbors || [])]);
 
-      // Keep only nodes in neighborhood
-      setNodes(prev => (prev || []).filter(n => neighborIds.has(n.id)));
-      // Keep only edges fully inside neighborhood
-      setEdges(prev => (prev || []).filter(e => neighborIds.has(e.source_id) && neighborIds.has(e.target_id)));
+      // IMPORTANT: build view from ALL data, not from previous (prevents “shrinking bug”)
+      const nextNodes = (allNodes || []).filter(n => neighborIds.has(n.id));
+      const nextEdges = (allEdges || []).filter(
+        e => neighborIds.has(e.source_id) && neighborIds.has(e.target_id)
+      );
+
+      setViewNodes(nextNodes);
+      setViewEdges(nextEdges);
     } catch (e) {
-      // If neighbor endpoint fails, don't break UX
       console.warn("neighbors fetch failed", e);
+      // keep existing view
+    }
+  };
+
+  const onNodeClick = async (node) => {
+    setSelectedNodeId(node?.id || null);
+    if (node?.id) {
+      await focusNeighborhood(node.id);
     }
   };
 
   const onReset = async () => {
-    setSelectedNode(null);
-    setLoading(true);
-    try {
-      const nodesData = await graphService.getNodes(200);
-      const edgesData = await graphService.getEdges(200);
-      setNodes(Array.isArray(nodesData) ? nodesData : (nodesData?.nodes || []));
-      setEdges(Array.isArray(edgesData) ? edgesData : (edgesData?.edges || []));
-    } finally {
-      setLoading(false);
-    }
+    setSelectedNodeId(null);
+    // reset view without refetching (fast)
+    setViewNodes(allNodes);
+    setViewEdges(allEdges);
   };
 
   if (loading) return <LoadingSpinner />;
@@ -110,7 +142,7 @@ export default function ProvGraph() {
         <div>
           <h3 className="font-bold text-lg">Provenance Graph</h3>
           <div className="text-xs text-gray-500">
-            Click a node to focus its 2-hop neighborhood (process → child → writes → reg keys).
+            Click a node to focus its 2-hop neighborhood (stable: does not shrink permanently).
           </div>
         </div>
 
@@ -119,20 +151,22 @@ export default function ProvGraph() {
             Reset
           </button>
           <span className="text-sm text-gray-600">
-            {filteredNodes.length} nodes • {filteredEdges.length} edges
+            {filteredViewNodes.length} nodes • {filteredViewEdges.length} edges
           </span>
         </div>
       </div>
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-3">
-        {Array.from(DEFAULT_EDGE_TYPES).map((t) => (
+        {ALL_EDGE_TYPES.map((t) => (
           <button
             key={t}
             onClick={() => onToggleEdgeType(t)}
             className={[
               "px-2 py-1 rounded text-xs border",
-              edgeTypeFilter.has(t) ? "bg-blue-600 text-white border-blue-700" : "bg-white text-gray-700 border-gray-300"
+              edgeTypeFilter.has(t)
+                ? "bg-blue-600 text-white border-blue-700"
+                : "bg-white text-gray-700 border-gray-300",
             ].join(" ")}
           >
             {t}
@@ -143,18 +177,18 @@ export default function ProvGraph() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="lg:col-span-2 bg-gray-50 rounded-lg p-2 border" style={{ minHeight: 560 }}>
           <D3ProvenanceGraph
-            nodes={filteredNodes}
-            edges={filteredEdges}
+            nodes={filteredViewNodes}
+            edges={filteredViewEdges}
             height={560}
-            onNodeClick={onNodeClick}   // NEW
-            selectedNodeId={selectedNode?.id} // NEW (highlight)
+            onNodeClick={onNodeClick}
+            selectedNodeId={selectedNodeId}
           />
         </div>
 
         <div className="bg-white rounded-lg border p-3 min-h-[560px]">
           <div className="font-semibold mb-2">Node Detail</div>
-          {selectedNode ? (
-            <NodeDetail node={selectedNode} />
+          {selectedNodeId ? (
+            <NodeDetail nodeId={selectedNodeId} />
           ) : (
             <div className="text-sm text-gray-500">
               Click a node in the graph to see details and auto-focus its neighborhood.

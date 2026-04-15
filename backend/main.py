@@ -54,7 +54,7 @@ async def lifespan(app: FastAPI):
             r"C:\Users\admin\Downloads",
             r"C:\Users\admin\Desktop",
             r"C:\Users\admin\Documents",
-            r"C:\Users\admin\AppData\Local\Temp",
+            # r"C:\Users\admin\AppData\Local\Temp",
         ]
 
         app.state.file_watcher = FileWatcherCollector(
@@ -222,6 +222,6 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=8000,
-        reload=True,
+        reload=False,
         log_level="info",
     )

@@ -91,6 +91,16 @@ export const graphService = {
     return graphService.getEdges(limit, null, sessionId);
   },
 
+  /**
+   * Get interesting/suspicious edges
+   */
+  getInterestingEdges: async (limit = 250, minAnomalyScore = 0.6, minSeverity = "UNKNOWN") => {
+    const response = await apiClient.get("/layer1/edges/interesting", {
+      params: { limit, min_anomaly_score: minAnomalyScore, min_severity: minSeverity },
+    });
+    return response.data;
+  },
+
   // ═══════════════════════════════════════════════════════════════
   // GRAPH TRAVERSAL
   // ═══════════════════════════════════════════════════════════════
@@ -110,6 +120,16 @@ export const graphService = {
    */
   getPathToRoot: async (nodeId) => {
     const response = await apiClient.get(`/layer1/path-to-root/${nodeId}`);
+    return response.data;
+  },
+
+  /**
+   * Get subgraph centered at seed node
+   */
+  getSubgraph: async (seedNodeId, hops = 2, limitEdges = 1000) => {
+    const response = await apiClient.get('/layer1/subgraph', {
+      params: { seed_node_id: seedNodeId, hops, limit_edges: limitEdges },
+    });
     return response.data;
   },
 
@@ -146,7 +166,7 @@ export const graphService = {
   // ═══════════════════════════════════════════════════════════════
 
   /**
-   * Subscribe to graph updates via SSE
+   * Subscribe to graph updates via SSE (Legacy/Basic)
    * Returns EventSource object
    */
   streamUpdates: (onUpdate, onError) => {
@@ -167,5 +187,35 @@ export const graphService = {
     };
 
     return eventSource;
+  },
+
+  /**
+   * Subscribe to filtered graph events via SSE
+   * Uses query parameters to filter events on the backend
+   */
+  streamGraphEvents: ({ suspiciousOnly = true, sysmonOnly = true, minAnomalyScore = 0.6 }, onEvent, onError) => {
+    const base = apiClient.defaults.baseURL;
+    const url = new URL(`${base}/layer1/stream`);
+    
+    url.searchParams.set("suspicious_only", String(suspiciousOnly));
+    url.searchParams.set("sysmon_only", String(sysmonOnly));
+    url.searchParams.set("min_anomaly_score", String(minAnomalyScore));
+
+    const es = new EventSource(url.toString());
+    
+    es.onmessage = (event) => {
+      try {
+        onEvent?.(JSON.parse(event.data));
+      } catch (e) {
+        console.error('Failed to parse SSE event data:', e);
+      }
+    };
+    
+    es.onerror = () => {
+      onError?.("SSE connection lost");
+      es.close();
+    };
+    
+    return es;
   },
 };

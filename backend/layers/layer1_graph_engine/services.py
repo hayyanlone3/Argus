@@ -15,8 +15,8 @@ import networkx as nx
 import uuid
 import os
 
-# NEW: automatic layer2 scoring
 from layers.layer2_scoring.auto_scoring import AutoScoringService
+from layers.layer1_graph_engine.event_bus import event_bus
 
 logger = setup_logger(__name__)
 
@@ -37,6 +37,28 @@ class GraphService:
                 existing_node.last_seen = datetime.utcnow()
                 db.commit()
                 logger.debug(f"♻️  Updated node: {node_data.name}")
+                
+                # SSE publish (best-effort) for node update
+                try:
+                    import asyncio
+                    asyncio.get_event_loop().create_task(
+                        event_bus.publish({
+                            "type": "node_updated",
+                            "node": {
+                                "id": existing_node.id,
+                                "type": existing_node.type.value if hasattr(existing_node.type, 'value') else existing_node.type,
+                                "name": existing_node.name,
+                                "path": existing_node.path,
+                                "hash_sha256": existing_node.hash_sha256,
+                                "path_risk": existing_node.path_risk,
+                                "first_seen": existing_node.first_seen.isoformat() if existing_node.first_seen else None,
+                                "last_seen": existing_node.last_seen.isoformat() if existing_node.last_seen else None,
+                            },
+                        })
+                    )
+                except Exception:
+                    pass
+                
                 return existing_node
 
             new_node = Node(**node_data.dict())
@@ -47,6 +69,28 @@ class GraphService:
             db.refresh(new_node)
 
             logger.debug(f"✨ Created node: {node_data.name} (ID: {new_node.id}, Type: {node_data.type})")
+            
+            # SSE publish (best-effort) for node creation
+            try:
+                import asyncio
+                asyncio.get_event_loop().create_task(
+                    event_bus.publish({
+                        "type": "node_updated",
+                        "node": {
+                            "id": new_node.id,
+                            "type": new_node.type.value if hasattr(new_node.type, 'value') else new_node.type,
+                            "name": new_node.name,
+                            "path": new_node.path,
+                            "hash_sha256": new_node.hash_sha256,
+                            "path_risk": new_node.path_risk,
+                            "first_seen": new_node.first_seen.isoformat() if new_node.first_seen else None,
+                            "last_seen": new_node.last_seen.isoformat() if new_node.last_seen else None,
+                        },
+                    })
+                )
+            except Exception:
+                pass
+            
             return new_node
 
         except Exception as e:
@@ -77,6 +121,42 @@ class GraphService:
                 )
             except Exception:
                 logger.exception(f"❌ Auto scoring failed for edge_id={new_edge.id}")
+
+            # After auto-scoring, refresh so severity/score are included
+            try:
+                db.refresh(new_edge)
+            except Exception:
+                pass
+
+            # SSE publish (best-effort)
+            try:
+                import asyncio
+
+                sev_val = None
+                try:
+                    sev_val = new_edge.final_severity.value if new_edge.final_severity else None
+                except Exception:
+                    sev_val = str(new_edge.final_severity) if new_edge.final_severity else None
+
+                asyncio.get_event_loop().create_task(
+                    event_bus.publish({
+                        "type": "edge_created",
+                        "edge": {
+                            "id": new_edge.id,
+                            "source_id": new_edge.source_id,
+                            "target_id": new_edge.target_id,
+                            "edge_type": new_edge.edge_type.value if hasattr(new_edge.edge_type, 'value') else new_edge.edge_type,
+                            "timestamp": new_edge.timestamp.isoformat() if new_edge.timestamp else None,
+                            "session_id": new_edge.session_id,
+                            "edge_metadata": new_edge.edge_metadata,
+                            "anomaly_score": new_edge.anomaly_score,
+                            "entropy_value": new_edge.entropy_value,
+                            "final_severity": sev_val,
+                        }
+                    })
+                )
+            except Exception:
+                pass
 
             return new_edge
 
