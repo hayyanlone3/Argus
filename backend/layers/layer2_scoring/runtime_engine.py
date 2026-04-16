@@ -1,6 +1,9 @@
 # backend/layers/layer2_scoring/runtime_engine.py
+import os
+import math
 import threading
 import time
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, Optional
 
@@ -16,25 +19,82 @@ LATEST_LOCK = threading.Lock()
 def clamp01(x: float) -> float:
     return max(0.0, min(1.0, float(x)))
 
+# ---- Entropy ----
+def shannon_entropy_bytes(data: bytes) -> float:
+    if not data:
+        return 0.0
+    freq = [0] * 256
+    for b in data:
+        freq[b] += 1
+    ent = 0.0
+    n = len(data)
+    for c in freq:
+        if c:
+            p = c / n
+            ent -= p * math.log2(p)
+    return ent
+
+def best_effort_file_entropy(path: str, max_bytes: int = 1024 * 1024) -> Optional[float]:
+    try:
+        if not path or not os.path.exists(path) or os.path.isdir(path):
+            return None
+        with open(path, "rb") as f:
+            data = f.read(max_bytes)
+        return float(shannon_entropy_bytes(data))
+    except Exception:
+        return None
+
+
+# ---- Burst tracking (per process image) ----
+_BURST_LOCK = threading.Lock()
+_WRITES_BY_PROC = {}  # proc -> deque[timestamps]
+
+def record_write(proc: str, ts: float, window_sec: float = 10.0) -> int:
+    proc = (proc or "").lower()
+    if not proc:
+        return 0
+    with _BURST_LOCK:
+        q = _WRITES_BY_PROC.get(proc)
+        if q is None:
+            q = deque()
+            _WRITES_BY_PROC[proc] = q
+        q.append(ts)
+        cutoff = ts - window_sec
+        while q and q[0] < cutoff:
+            q.popleft()
+        return len(q)
+
+
 # ---------------------------
 # Layer A: Statistical
 # ---------------------------
 def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
-    """
-    Statistical anomaly: entropy + simple burst placeholders.
-    For now: only uses entropy if provided; later we can compute entropy from file bytes/path.
-    """
     score = 0.0
     reasons = []
 
-    ent = evt.file_entropy
-    if ent is not None:
-        if ent >= 7.9:
-            score += 0.6
-            reasons.append(f"high_entropy={ent:.2f}")
-        elif ent >= 7.2:
-            score += 0.3
-            reasons.append(f"mid_entropy={ent:.2f}")
+    # Only meaningful for file activity initially
+    if evt.kind == "FILE_CREATE" and evt.target_path:
+        # Entropy from disk (real signal)
+        ent = best_effort_file_entropy(evt.target_path, max_bytes=512 * 1024)
+        if ent is not None:
+            evt.file_entropy = ent  # attach for UI/other layers
+            if ent >= 7.9:
+                score += 0.65
+                reasons.append(f"high_entropy={ent:.2f}")
+            elif ent >= 7.2:
+                score += 0.35
+                reasons.append(f"mid_entropy={ent:.2f}")
+            else:
+                reasons.append(f"entropy={ent:.2f}")
+
+        # Burst: many writes in short window by same process image
+        rate = record_write(evt.child_process or "", evt.ts, window_sec=10.0)
+        if rate >= 20:
+            score += 0.35
+            reasons.append(f"write_burst_10s={rate}")
+        elif rate >= 10:
+            score += 0.20
+            reasons.append(f"write_spike_10s={rate}")
 
     return {"score": clamp01(score), "reasons": reasons}
 
@@ -173,7 +233,5 @@ class Layer2RuntimeEngine:
 
             except Exception:
                 logger.exception("❌ Layer2RuntimeEngine event processing failed")
-
-
 
 # parallel, non-blocking and safe because it doesn’t writes DB. 

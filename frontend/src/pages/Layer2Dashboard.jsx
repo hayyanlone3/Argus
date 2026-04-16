@@ -1,159 +1,265 @@
 // src/pages/Layer2Dashboard.jsx
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import apiClient from '../config/api';
+
+function Badge({ decision }) {
+  const cls =
+    decision === 'MALWARE ALERT'
+      ? 'bg-red-600 text-white'
+      : decision === 'SUSPICIOUS'
+      ? 'bg-yellow-500 text-black'
+      : 'bg-green-600 text-white';
+  return <span className={`px-2 py-1 rounded text-xs font-semibold ${cls}`}>{decision}</span>;
+}
+
+function pct(x) {
+  const n = Number(x);
+  if (!Number.isFinite(n)) return '0%';
+  return `${Math.round(n * 100)}%`;
+}
+
+function mono(s) {
+  return <span className="font-mono text-xs text-slate-600">{s}</span>;
+}
 
 export default function Layer2Dashboard() {
-  const [score2a, setScore2a] = useState(0.5);
-  const [score2b, setScore2b] = useState(0.5);
-  const [score2c, setScore2c] = useState(0.5);
-  const [result, setResult] = useState(null);
+  const [items, setItems] = useState([]);
+  const [selected, setSelected] = useState(null);
 
-  const handleCalculate = () => {
-    // Simple voting logic for demo
-    let severity = 'BENIGN';
-    
-    if (score2a > 0.7 && score2c > 0.75) {
-      severity = 'CRITICAL';
-    } else if ((score2a > 0.7 || score2b > 0.8) && score2c > 0.7) {
-      severity = 'CRITICAL';
-    } else if (score2a > 0.7 || score2b > 0.8 || score2c > 0.85) {
-      severity = 'WARNING';
-    } else if (score2a > 0.6 || score2b > 0.6 || score2c > 0.6) {
-      severity = 'UNKNOWN';
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+
+  const [error, setError] = useState(null);
+
+  const fetchLatest = async (initial = false) => {
+    try {
+      if (initial) setLoading(true);
+      else setRefreshing(true);
+
+      const resp = await apiClient.get('/layer2/live/latest', { 
+        params: { limit: 50, suspicious_only: !showAll } 
+      });
+      const data = resp.data?.items || [];
+      setItems(data);
+      setError(null);
+
+      if (!selected && data.length > 0) {
+        setSelected(data[0]);
+      }
+    } catch (e) {
+      setError(e?.message || 'Failed to load live scoring data');
+    } finally {
+      if (initial) setLoading(false);
+      else setRefreshing(false);
     }
-
-    const confidence = (score2a + score2b + score2c) / 3;
-    
-    setResult({ severity, confidence });
   };
 
+  useEffect(() => {
+    fetchLatest(true);
+    const id = setInterval(() => fetchLatest(false), 2000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAll]);
+
+  const header = useMemo(() => {
+    const count = items.length;
+    return `${count} live events`;
+  }, [items]);
+
+  if (loading) {
+    return (
+      <div className="p-4">
+        <div className="text-slate-800 font-semibold">Layer 2: Scoring Engine</div>
+        <div className="text-slate-500 text-sm font-mono">loading…</div>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
-      <div>
-        <h1>📈 Layer 2: Scoring Engine</h1>
-        <p className="text-gray-600">3-channel anomaly detection: Math • Statistical • ML</p>
-      </div>
-
-      {/* Channel Sliders */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Channel 2A */}
-        <div className="card">
-          <h3 className="font-bold mb-3">2A: Math Certainty</h3>
-          <div className="mb-4">
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={score2a * 100}
-              onChange={(e) => setScore2a(e.target.value / 100)}
-              className="w-full"
-            />
-            <p className="text-2xl font-bold text-red-600 mt-2">{(score2a * 100).toFixed(0)}%</p>
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-slate-900 text-xl font-semibold tracking-wide">
+              Layer 2 • Live Scoring (Sysmon only)
+            </div>
+            <div className="text-slate-500 text-sm font-mono">
+              3-channel parallel scoring (A/B/C) + fusion decision • {header}
+            </div>
           </div>
-          <div className="text-xs text-gray-600 space-y-1">
-            <p>• Spawn rate anomaly</p>
-            <p>• File rename burst</p>
-            <p>• Edge burst detection</p>
+
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 text-xs text-slate-500 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showAll}
+                onChange={(e) => setShowAll(e.target.checked)}
+                className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              />
+              Show all events
+            </label>
+            <div className="flex items-center gap-2">
+              <div className="text-xs font-mono text-slate-500">
+                {refreshing ? 'syncing…' : 'live'}
+              </div>
+              <div className={`h-2 w-2 rounded-full ${refreshing ? 'bg-yellow-400' : 'bg-green-500'}`} />
+            </div>
           </div>
         </div>
 
-        {/* Channel 2B */}
-        <div className="card">
-          <h3 className="font-bold mb-3">2B: Statistical</h3>
-          <div className="mb-4">
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={score2b * 100}
-              onChange={(e) => setScore2b(e.target.value / 100)}
-              className="w-full"
-            />
-            <p className="text-2xl font-bold text-warning mt-2">{(score2b * 100).toFixed(0)}%</p>
-          </div>
-          <div className="text-xs text-gray-600 space-y-1">
-            <p>• BETH baseline</p>
-            <p>• P-matrix anomaly</p>
-            <p>• Statistical impossibility</p>
-          </div>
-        </div>
-
-        {/* Channel 2C */}
-        <div className="card">
-          <h3 className="font-bold mb-3">2C: ML Anomaly</h3>
-          <div className="mb-4">
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={score2c * 100}
-              onChange={(e) => setScore2c(e.target.value / 100)}
-              className="w-full"
-            />
-            <p className="text-2xl font-bold text-unknown mt-2">{(score2c * 100).toFixed(0)}%</p>
-          </div>
-          <div className="text-xs text-gray-600 space-y-1">
-            <p>• River HalfSpaceTrees</p>
-            <p>• Graph topology</p>
-            <p>• Online learning</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Voting Logic */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-lg">🤖 Voting Logic</h3>
-          <button onClick={handleCalculate} className="btn-primary btn-sm">
-            Calculate Decision
-          </button>
-        </div>
-
-        {result && (
-          <div className={`p-4 rounded-lg border-2 ${
-            result.severity === 'CRITICAL' ? 'border-red-600 bg-red-50'
-            : result.severity === 'WARNING' ? 'border-warning bg-yellow-50'
-            : result.severity === 'UNKNOWN' ? 'border-unknown bg-blue-50'
-            : 'border-green-600 bg-green-50'
-          }`}>
-            <p className="font-bold text-lg mb-1">Decision: {result.severity}</p>
-            <p className="text-sm">Confidence: {(result.confidence * 100).toFixed(0)}%</p>
+        {error && (
+          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-red-700 text-sm">
+            {error}
           </div>
         )}
       </div>
 
-      {/* Decision Tree */}
-      <div className="card">
-        <h3 className="font-bold text-lg mb-4">Decision Tree</h3>
-        <div className="space-y-2 text-sm">
-          <div className="border-l-4 border-red-600 pl-3">
-            <p className="font-semibold">CRITICAL</p>
-            <p className="text-gray-600 text-xs">2A AND 2C both high, OR (2A OR 2B) AND 2C high, OR injection detected</p>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        {/* Left: event list */}
+        <div className="xl:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-slate-900 font-semibold">Event Stream</div>
+            <div className="text-xs text-slate-500 font-mono">/api/layer2/live/latest</div>
           </div>
-          <div className="border-l-4 border-warning pl-3">
-            <p className="font-semibold">WARNING</p>
-            <p className="text-gray-600 text-xs">Single channel {'>='} threshold, weak multi-signal</p>
-          </div>
-          <div className="border-l-4 border-unknown pl-3">
-            <p className="font-semibold">UNKNOWN</p>
-            <p className="text-gray-600 text-xs">Multiple moderate signals, insufficient confidence</p>
-          </div>
-          <div className="border-l-4 border-green-600 pl-3">
-            <p className="font-semibold">BENIGN</p>
-            <p className="text-gray-600 text-xs">No anomalies detected across channels</p>
+
+          <div className="space-y-2 max-h-[620px] overflow-y-auto pr-1">
+            {items.map((it) => {
+              const evt = it.event || {};
+              const fusion = it.fusion || {};
+              const scores = it.scores || {};
+              const a = scores?.A?.score ?? 0;
+              const b = scores?.B?.score ?? 0;
+              const c = scores?.C?.score ?? 0;
+
+              const title =
+                evt.kind === 'PROCESS_CREATE'
+                  ? `${(evt.parent_process || '').split('\\').pop()} → ${(evt.child_process || '').split('\\').pop()}`
+                  : evt.kind === 'FILE_CREATE'
+                  ? `FILE: ${(evt.target_path || '').split('\\').pop()}`
+                  : evt.kind === 'REG_SET'
+                  ? `REG: ${(evt.reg_target || '').slice(0, 60)}`
+                  : evt.kind || 'EVENT';
+
+              return (
+                <button
+                  key={evt.event_id}
+                  onClick={() => setSelected(it)}
+                  className={[
+                    "w-full text-left rounded-lg border p-3 transition",
+                    selected?.event?.event_id === evt.event_id
+                      ? "border-slate-400 bg-white shadow-sm ring-1 ring-slate-200"
+                      : "border-slate-200 bg-slate-50 hover:bg-white",
+                  ].join(" ")}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-slate-900 font-semibold">{title || '—'}</div>
+                      <div className="text-xs text-slate-500 font-mono mt-1">
+                        {evt.kind} • {evt.source} • {evt.event_id}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                      <Badge decision={fusion.decision || 'NORMAL'} />
+                      <div className="text-xs text-slate-500 font-mono">
+                        final={Number(fusion.final_score ?? 0).toFixed(3)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 mt-3">
+                    <div className="rounded-md border border-slate-200 bg-white px-2 py-2">
+                      <div className="text-[10px] text-slate-500 font-mono">A</div>
+                      <div className="text-sm text-slate-900 font-semibold">{pct(a)}</div>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-white px-2 py-2">
+                      <div className="text-[10px] text-slate-500 font-mono">B</div>
+                      <div className="text-sm text-slate-900 font-semibold">{pct(b)}</div>
+                    </div>
+                    <div className="rounded-md border border-slate-200 bg-white px-2 py-2">
+                      <div className="text-[10px] text-slate-500 font-mono">C</div>
+                      <div className="text-sm text-slate-900 font-semibold">{pct(c)}</div>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-slate-500 font-mono mt-2">
+                    rule: {fusion.rule || '—'}
+                  </div>
+                </button>
+              );
+            })}
+
+            {items.length === 0 && (
+              <div className="text-slate-500 text-sm">
+                No live events yet. Confirm SysmonCollector is enabled and backend is running.
+              </div>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Info */}
-      <div className="card">
-        <h3 className="font-bold text-lg mb-3">📖 About Layer 2</h3>
-        <ul className="space-y-2 text-sm text-gray-700">
-          <li>✓ <strong>3 Parallel Channels:</strong> Math certainty, statistical impossibility, ML anomaly</li>
-          <li>✓ <strong>Voting Logic:</strong> Combine signals for final severity decision</li>
-          <li>✓ <strong>Output:</strong> BENIGN | UNKNOWN | WARNING | CRITICAL + confidence</li>
-          <li>✓ <strong>Goal:</strong> Reduce false positives while catching true threats</li>
-        </ul>
+        {/* Right: detail */}
+        <div className="xl:col-span-1 rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-sm">
+          <div className="text-slate-900 font-semibold mb-2">Selected Event</div>
+
+          {!selected ? (
+            <div className="text-slate-500 text-sm">Click an event on the left.</div>
+          ) : (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-slate-200 bg-white p-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-slate-500 font-mono">DECISION</div>
+                  <Badge decision={selected?.fusion?.decision || 'NORMAL'} />
+                </div>
+                <div className="text-slate-900 text-lg font-semibold mt-2">
+                  final_score={Number(selected?.fusion?.final_score ?? 0).toFixed(3)}
+                </div>
+                <div className="text-xs text-slate-500 font-mono mt-1">
+                  {selected?.fusion?.rule || '—'}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-white p-3">
+                <div className="text-xs text-slate-500 font-mono mb-2">EVENT</div>
+                <div className="space-y-1">
+                  <div>{mono(`event_id: ${selected?.event?.event_id}`)}</div>
+                  <div>{mono(`kind: ${selected?.event?.kind}`)}</div>
+                  <div>{mono(`session_id: ${selected?.event?.session_id}`)}</div>
+                  {selected?.event?.parent_process && <div>{mono(`parent: ${selected.event.parent_process}`)}</div>}
+                  {selected?.event?.child_process && <div>{mono(`child: ${selected.event.child_process}`)}</div>}
+                  {selected?.event?.target_path && <div>{mono(`file: ${selected.event.target_path}`)}</div>}
+                  {selected?.event?.reg_target && <div>{mono(`reg: ${selected.event.reg_target}`)}</div>}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-white p-3">
+                <div className="text-xs text-slate-500 font-mono mb-2">SCORES</div>
+                <div className="space-y-2">
+                  {['A', 'B', 'C'].map((k) => (
+                    <div key={k} className="border border-slate-200 rounded-md bg-slate-50 p-2">
+                      <div className="flex items-center justify-between">
+                        <div className="text-xs text-slate-600 font-mono">{k}</div>
+                        <div className="text-xs text-slate-500 font-mono">
+                          {pct(selected?.scores?.[k]?.score ?? 0)}
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-500 mt-1">
+                        {(selected?.scores?.[k]?.reasons || []).slice(0, 4).join(', ') || '—'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <button
+                onClick={() => fetchLatest(false)}
+                className="w-full px-3 py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition-colors text-sm font-semibold shadow-sm"
+              >
+                Refresh now
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

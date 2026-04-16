@@ -35,6 +35,12 @@ async def health():
     }
 
 
+@router.get("/live/ping")
+async def live_ping():
+    """Simple ping for live stream connectivity checks."""
+    return {"ok": True}
+
+
 @router.post("/score-channel-2a")
 async def score_channel_2a(
     process_node_id: int,
@@ -250,10 +256,15 @@ async def get_scoring_stats(db: Session = Depends(get_db)):
 
 
 @router.get("/live/latest")
-async def get_live_latest(limit: int = Query(50, ge=1, le=500)):
+async def get_live_latest(
+    limit: int = Query(50, ge=1, le=500),
+    suspicious_only: bool = Query(True),
+    min_final_score: float = Query(0.50, ge=0.0, le=1.0),
+):
     """
     Return latest Layer2 live decisions produced by the runtime engine.
-    This is real-time (in-memory), not manual sliders.
+
+    Defaults to suspicious_only=true to avoid flooding UI with benign events.
     """
     try:
         with LATEST_LOCK:
@@ -261,10 +272,50 @@ async def get_live_latest(limit: int = Query(50, ge=1, le=500)):
 
         # newest first
         items.sort(key=lambda x: x.get("ts", 0), reverse=True)
-        return {
-            "total": len(items[:limit]),
-            "items": items[:limit],
-        }
+
+        def is_suspicious(it: dict) -> bool:
+            fusion = (it or {}).get("fusion") or {}
+            decision = fusion.get("decision") or "NORMAL"
+            final_score = float(fusion.get("final_score") or 0.0)
+            if decision in ("SUSPICIOUS", "MALWARE ALERT"):
+                return True
+            return final_score >= min_final_score
+
+        filtered = []
+        for it in items:
+            if suspicious_only and not is_suspicious(it):
+                continue
+
+            evt = it.get("event", {}) or {}
+            scores = it.get("scores", {}) or {}
+            fusion = it.get("fusion", {}) or {}
+
+            filtered.append({
+                "event": {
+                    "event_id": evt.get("event_id"),
+                    "ts": evt.get("ts"),
+                    "source": evt.get("source"),
+                    "kind": evt.get("kind"),
+                    "session_id": evt.get("session_id"),
+                    "parent_process": evt.get("parent_process"),
+                    "child_process": evt.get("child_process"),
+                    "target_path": evt.get("target_path"),
+                    "reg_target": evt.get("reg_target"),
+                    "file_entropy": evt.get("file_entropy"),
+                },
+                "scores": {
+                    "A": scores.get("A"),
+                    "B": scores.get("B"),
+                    "C": scores.get("C"),
+                },
+                "fusion": fusion,
+                "ts": it.get("ts"),
+            })
+
+            if len(filtered) >= limit:
+                break
+
+        return {"total": len(filtered), "items": filtered}
     except Exception as e:
         logger.error(f"❌ Failed to get live latest: {e}")
         raise HTTPException(status_code=500, detail=str(e))

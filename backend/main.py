@@ -57,47 +57,54 @@ async def lifespan(app: FastAPI):
         app.state.layer2_engine.start()
 
         # ──────────────────────────────────────────────────────────
-        # PLAN A: In-process file watcher collector (real data → Layer 1)
+        # File watcher collector (DEV only; disable for Sysmon-only)
         # ──────────────────────────────────────────────────────────
         watch_paths = [
             r"C:\Users\admin\Downloads",
             r"C:\Users\admin\Desktop",
             r"C:\Users\admin\Documents",
-            # r"C:\Users\admin\AppData\Local\Temp",
         ]
 
+        fw_enabled = os.getenv("ARGUS_FILE_WATCHER_ENABLED", "true").lower() == "true"
         app.state.file_watcher = FileWatcherCollector(
             paths=watch_paths,
-            enabled=os.getenv("ARGUS_FILE_WATCHER_ENABLED", "true").lower() == "true",
+            enabled=fw_enabled,
             hash_max_mb=int(os.getenv("ARGUS_FILE_HASH_MAX_MB", "10")),
-            ignore_prefixes=[
-                r"C:\Windows",
-                r"C:\Program Files",
-                r"C:\Program Files (x86)",
-            ],
+            ignore_prefixes=[r"C:\Windows", r"C:\Program Files", r"C:\Program Files (x86)"],
             audit_enabled=os.getenv("ARGUS_AUDIT_ENABLED", "true").lower() == "true",
         )
-        app.state.file_watcher.start()
+        if fw_enabled:
+            app.state.file_watcher.start()
+        else:
+            logger.info("⏭️ FileWatcherCollector disabled (ARGUS_FILE_WATCHER_ENABLED=false)")
 
         # ──────────────────────────────────────────────────────────
-        # PLAN A: Process snapshot collector (PROCESS nodes + SPAWNED edges)
+        # Process snapshot collector (DEV only; disable for Sysmon-only)
         # ──────────────────────────────────────────────────────────
+        ps_enabled = os.getenv("ARGUS_PROC_SNAPSHOT_ENABLED", "true").lower() == "true"
         app.state.proc_snapshot = ProcessSnapshotCollector(
-            enabled=os.getenv("ARGUS_PROC_SNAPSHOT_ENABLED", "true").lower() == "true",
+            enabled=ps_enabled,
             interval_seconds=int(os.getenv("ARGUS_PROC_SNAPSHOT_INTERVAL_SEC", "5")),
             audit_enabled=os.getenv("ARGUS_AUDIT_ENABLED", "true").lower() == "true",
         )
-        app.state.proc_snapshot.start()
+        if ps_enabled:
+            app.state.proc_snapshot.start()
+        else:
+            logger.info("⏭️ ProcessSnapshotCollector disabled (ARGUS_PROC_SNAPSHOT_ENABLED=false)")
 
         # ──────────────────────────────────────────────────────────
         # Sysmon Collector
         # ──────────────────────────────────────────────────────────
+        sm_enabled = os.getenv("ARGUS_SYSMON_ENABLED", "true").lower() == "true"
         app.state.sysmon = SysmonCollector(
-            enabled=os.getenv("ARGUS_SYSMON_ENABLED", "true").lower() == "true",
+            enabled=sm_enabled,
             poll_seconds=float(os.getenv("ARGUS_SYSMON_POLL_SEC", "1.0")),
             audit_enabled=os.getenv("ARGUS_AUDIT_ENABLED", "true").lower() == "true",
         )
-        app.state.sysmon.start()
+        if sm_enabled:
+            app.state.sysmon.start()
+        else:
+            logger.info("⏭️ SysmonCollector disabled by ARGUS_SYSMON_ENABLED=false")
 
         logger.info("✅ Database initialized successfully")
         logger.info("✅ API running on 0.0.0.0:8000")
