@@ -5,9 +5,11 @@ Groups edges into incidents using 2-of-3 signal correlation
 """
 
 from sqlalchemy.orm import Session
+from typing import Optional
 from database.models import Edge, Node, Incident
 from database.schemas import IncidentCreate
 from shared.enums import Severity, EdgeType
+from sqlalchemy import func
 from shared.logger import setup_logger
 from shared.constants import (
     CORRELATION_MAX_HOPS,
@@ -336,3 +338,64 @@ class CorrelatorService:
         except Exception as e:
             logger.error(f"❌ Failed to get incident chain: {e}")
             return {}
+    
+    @staticmethod
+    def upsert_incident_for_session(db: Session, session_id: str) -> Optional[Incident]:
+        """
+        Create or update an Incident for a given session_id based on current edges.
+        Triggered from Layer1 when a suspicious edge arrives.
+        """
+        try:
+            edges = db.query(Edge).filter(Edge.session_id == session_id).order_by(Edge.timestamp.asc()).all()
+            if not edges:
+                return None
+
+            # Decide severity: max of severities present on edges
+            order = {Severity.BENIGN: 0, Severity.UNKNOWN: 1, Severity.WARNING: 2, Severity.CRITICAL: 3}
+
+            severities = [e.final_severity for e in edges if e.final_severity is not None]
+            if not severities:
+                return None
+
+            max_sev = max(severities, key=lambda s: order.get(s, 0))
+
+            # Only create incidents for UNKNOWN+ (Option A)
+            if max_sev == Severity.BENIGN:
+                return None
+
+            incident = db.query(Incident).filter(Incident.session_id == session_id).first()
+
+            # Narrative + MITRE
+            mitre_stage = CorrelatorService.determine_mitre_stage(edges)
+            from .narrative import NarrativeGenerator
+            narrative = NarrativeGenerator.generate(edges, max_sev)
+
+            confidence = min(len(edges) / 10.0, 1.0)
+
+            if incident is None:
+                incident = Incident(
+                    session_id=session_id,
+                    created_at=datetime.utcnow(),
+                    confidence=confidence,
+                    severity=max_sev,
+                    mitre_stage=mitre_stage,
+                    narrative=narrative,
+                    status="OPEN",
+                )
+                db.add(incident)
+            else:
+                # escalate severity if needed; refresh narrative
+                incident.confidence = confidence
+                incident.mitre_stage = mitre_stage
+                incident.narrative = narrative
+                if order.get(max_sev, 0) > order.get(incident.severity, 0):
+                    incident.severity = max_sev
+
+            db.commit()
+            db.refresh(incident)
+            return incident
+
+        except Exception as e:
+            logger.error(f"❌ upsert_incident_for_session failed: {e}")
+            db.rollback()
+            return None

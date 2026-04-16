@@ -1,3 +1,5 @@
+# backend/collectors/sysmon_collector.py
+
 import time
 import threading
 from datetime import datetime
@@ -13,6 +15,7 @@ from shared.audit import AuditLogger
 from database import connection
 from database.schemas import NodeCreate, EdgeCreate
 from layers.layer1_graph_engine.services import GraphService
+from layers.layer2_scoring.event_stream import TelemetryEvent, publish_event, new_event_id
 
 logger = setup_logger(__name__)
 
@@ -180,6 +183,25 @@ class SysmonCollector:
             child_guid = data.get("ProcessGuid") or ""
             parent_guid = data.get("ParentProcessGuid") or ""
 
+            sid = _session_id("sysmon", f"spawn:{child_pid}")
+
+            # publish to Layer2 stream (non-blocking)
+            publish_event(TelemetryEvent(
+                event_id=new_event_id("sysmon1"),
+                ts=time.time(),
+                source="sysmon",
+                kind="PROCESS_CREATE",
+                session_id=sid,
+                parent_process=parent_image,
+                child_process=child_image,
+                parent_cmd=data.get("ParentCommandLine"),
+                child_cmd=data.get("CommandLine"),
+                parent_guid=parent_guid,
+                child_guid=child_guid,
+                parent_pid=parent_pid,
+                child_pid=child_pid,
+            ))
+
             parent = GraphService.create_or_update_node(
                 db,
                 NodeCreate(type=NodeType.PROCESS, name=(parent_image.split("\\")[-1] or "parent"), path=parent_image, hash_sha256=None, path_risk=0.0),
@@ -189,7 +211,6 @@ class SysmonCollector:
                 NodeCreate(type=NodeType.PROCESS, name=(child_image.split("\\")[-1] or "child"), path=child_image, hash_sha256=None, path_risk=0.0),
             )
 
-            sid = _session_id("sysmon", f"spawn:{child_pid}")
             GraphService.create_edge(
                 db,
                 EdgeCreate(
@@ -236,6 +257,21 @@ class SysmonCollector:
             guid = data.get("ProcessGuid") or ""
             target = data.get("TargetFilename") or ""
 
+            sid = _session_id("sysmon", f"write:{pid}")
+
+            # publish to Layer2 stream (non-blocking)
+            publish_event(TelemetryEvent(
+                event_id=new_event_id("sysmon11"),
+                ts=time.time(),
+                source="sysmon",
+                kind="FILE_CREATE",
+                session_id=sid,
+                child_process=image,
+                child_guid=guid,
+                child_pid=pid,
+                target_path=target,
+            ))
+
             proc = GraphService.create_or_update_node(
                 db,
                 NodeCreate(type=NodeType.PROCESS, name=(image.split("\\")[-1] or "process"), path=image, hash_sha256=None, path_risk=0.0),
@@ -245,7 +281,6 @@ class SysmonCollector:
                 NodeCreate(type=NodeType.FILE, name=(target.split("\\")[-1] or "file"), path=target, hash_sha256=None, path_risk=0.0),
             )
 
-            sid = _session_id("sysmon", f"write:{pid}")
             GraphService.create_edge(
                 db,
                 EdgeCreate(
@@ -290,6 +325,22 @@ class SysmonCollector:
             target_obj = data.get("TargetObject") or ""
             details = data.get("Details") or ""
 
+            sid = _session_id("sysmon", f"reg:{pid}")
+
+            # publish to Layer2 stream (non-blocking)
+            publish_event(TelemetryEvent(
+                event_id=new_event_id("sysmon13"),
+                ts=time.time(),
+                source="sysmon",
+                kind="REG_SET",
+                session_id=sid,
+                child_process=image,
+                child_guid=guid,
+                child_pid=pid,
+                reg_target=target_obj,
+                reg_details=details,
+            ))
+
             proc = GraphService.create_or_update_node(
                 db,
                 NodeCreate(type=NodeType.PROCESS, name=(image.split("\\")[-1] or "process"), path=image, hash_sha256=None, path_risk=0.0),
@@ -299,7 +350,6 @@ class SysmonCollector:
                 NodeCreate(type=NodeType.REG_KEY, name=(target_obj.split("\\")[-1] or "reg"), path=target_obj, hash_sha256=None, path_risk=0.0),
             )
 
-            sid = _session_id("sysmon", f"reg:{pid}")
             GraphService.create_edge(
                 db,
                 EdgeCreate(

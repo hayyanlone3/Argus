@@ -12,6 +12,8 @@ from shared.logger import setup_logger
 from .scoring import ScoringEngine
 from .voting_logic import VotingEngine
 
+from layers.layer2_scoring.runtime_engine import LATEST_DECISIONS, LATEST_LOCK
+
 logger = setup_logger(__name__)
 
 router = APIRouter()
@@ -244,4 +246,43 @@ async def get_scoring_stats(db: Session = Depends(get_db)):
     
     except Exception as e:
         logger.error(f"❌ Failed to get stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/live/latest")
+async def get_live_latest(limit: int = Query(50, ge=1, le=500)):
+    """
+    Return latest Layer2 live decisions produced by the runtime engine.
+    This is real-time (in-memory), not manual sliders.
+    """
+    try:
+        with LATEST_LOCK:
+            items = list(LATEST_DECISIONS.values())
+
+        # newest first
+        items.sort(key=lambda x: x.get("ts", 0), reverse=True)
+        return {
+            "total": len(items[:limit]),
+            "items": items[:limit],
+        }
+    except Exception as e:
+        logger.error(f"❌ Failed to get live latest: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/live/{event_id}")
+async def get_live_event(event_id: str):
+    """
+    Return one live event decision by event_id.
+    """
+    try:
+        with LATEST_LOCK:
+            item = LATEST_DECISIONS.get(event_id)
+        if not item:
+            raise HTTPException(status_code=404, detail="event_id not found")
+        return item
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to get live event: {e}")
         raise HTTPException(status_code=500, detail=str(e))

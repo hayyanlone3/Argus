@@ -23,6 +23,9 @@ from layers.layer3_correlator.routes import router as layer3_router
 from layers.layer4_response.routes import router as layer4_router
 from layers.layer5_learning.routes import router as layer5_router
 
+# Layer 2 Engine
+from layers.layer2_scoring.runtime_engine import Layer2RuntimeEngine
+
 # Collectors
 from collectors.file_watcher_collector import FileWatcherCollector
 from collectors.process_snapshot_collector import ProcessSnapshotCollector
@@ -46,6 +49,12 @@ async def lifespan(app: FastAPI):
 
         # Initialize database (must happen before collectors that use SessionLocal)
         init_db()
+
+        # ──────────────────────────────────────────────────────────
+        # START Layer 2 Runtime Engine
+        # ──────────────────────────────────────────────────────────
+        app.state.layer2_engine = Layer2RuntimeEngine()
+        app.state.layer2_engine.start()
 
         # ──────────────────────────────────────────────────────────
         # PLAN A: In-process file watcher collector (real data → Layer 1)
@@ -80,17 +89,20 @@ async def lifespan(app: FastAPI):
         )
         app.state.proc_snapshot.start()
 
+        # ──────────────────────────────────────────────────────────
+        # Sysmon Collector
+        # ──────────────────────────────────────────────────────────
+        app.state.sysmon = SysmonCollector(
+            enabled=os.getenv("ARGUS_SYSMON_ENABLED", "true").lower() == "true",
+            poll_seconds=float(os.getenv("ARGUS_SYSMON_POLL_SEC", "1.0")),
+            audit_enabled=os.getenv("ARGUS_AUDIT_ENABLED", "true").lower() == "true",
+        )
+        app.state.sysmon.start()
+
         logger.info("✅ Database initialized successfully")
         logger.info("✅ API running on 0.0.0.0:8000")
         logger.info("✅ Debug mode: True")
         logger.info("=" * 80)
-
-        app.state.sysmon = SysmonCollector(
-        enabled=os.getenv("ARGUS_SYSMON_ENABLED", "true").lower() == "true",
-        poll_seconds=float(os.getenv("ARGUS_SYSMON_POLL_SEC", "1.0")),
-        audit_enabled=os.getenv("ARGUS_AUDIT_ENABLED", "true").lower() == "true",
-)
-        app.state.sysmon.start()
 
     except Exception as e:
         logger.error(f"❌ Startup failed: {e}")
@@ -99,6 +111,13 @@ async def lifespan(app: FastAPI):
     yield
 
     # SHUTDOWN
+    try:
+        e = getattr(app.state, "layer2_engine", None)
+        if e:
+            e.stop()
+    except Exception as ex:
+        logger.error(f"❌ Failed to stop layer2 engine cleanly: {ex}")
+
     try:
         ps = getattr(app.state, "proc_snapshot", None)
         if ps:
@@ -113,16 +132,19 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Failed to stop file watcher cleanly: {e}")
         
+    try:
         sm = getattr(app.state, "sysmon", None)
         if sm:
             sm.stop()
+    except Exception as e:
+        logger.error(f"❌ Failed to stop sysmon cleanly: {e}")
 
     logger.info("🛑 ARGUS Backend shutting down...")
 
 
 # ═══════════════════════════════════════════════════════════════
 # FASTAPI APP
-# ═════════════════════════════════════════��═════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 app = FastAPI(
     title="ARGUS v2.2",
@@ -184,7 +206,7 @@ app.include_router(layer4_router, prefix="/api/layer4", tags=["Layer 4: Response
 app.include_router(layer5_router, prefix="/api/layer5", tags=["Layer 5: Learning"])
 
 # ═══════════════════════════════════════════════════════════════
-# ERROR HANDLERS (FIXED: must return a Response, not a dict)
+# ERROR HANDLERS
 # ═══════════════════════════════════════════════════════════════
 
 @app.exception_handler(404)

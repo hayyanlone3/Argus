@@ -17,6 +17,7 @@ import os
 
 from layers.layer2_scoring.auto_scoring import AutoScoringService
 from layers.layer1_graph_engine.event_bus import event_bus
+from layers.layer3_correlator.services import CorrelatorService
 
 logger = setup_logger(__name__)
 
@@ -127,6 +128,13 @@ class GraphService:
                 db.refresh(new_edge)
             except Exception:
                 pass
+
+            # NEW: Layer 3 auto-incident creation for suspicious events
+            try:
+                if new_edge.final_severity in (Severity.UNKNOWN, Severity.WARNING, Severity.CRITICAL):
+                    CorrelatorService.upsert_incident_for_session(db, new_edge.session_id)
+            except Exception:
+                logger.exception("❌ Layer3 auto-incident creation failed")
 
             # SSE publish (best-effort)
             try:
