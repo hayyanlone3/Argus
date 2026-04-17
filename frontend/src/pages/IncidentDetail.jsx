@@ -13,25 +13,30 @@ export default function IncidentDetail() {
   const navigate = useNavigate();
   const [incident, setIncident] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
-  const fetchIncident = async () => {
+  const fetchIncident = async (initial = false) => {
     try {
-      setLoading(true);
+      if (initial) setLoading(true);
+      else setRefreshing(true);
+
       const data = await incidentService.getIncident(sessionId);
       setIncident(data);
       setError(null);
     } catch (err) {
       setError(err.message);
     } finally {
-      setLoading(false);
+      if (initial) setLoading(false);
+      else setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    fetchIncident();
-    const interval = setInterval(fetchIncident, 10000);
+    fetchIncident(true);
+    const interval = setInterval(() => fetchIncident(false), 10000);
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   if (loading) return <LoadingSpinner />;
@@ -64,10 +69,18 @@ export default function IncidentDetail() {
 
       <div className="flex items-start justify-between">
         <div>
-          <h1>Incident {formatHash(inc.session_id, 12)}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Incident {formatHash(inc.session_id, 12)}</h1>
           <p className="text-gray-600">{inc.mitre_stage || 'Unknown Stage'}</p>
         </div>
-        <SeverityBadge severity={inc.severity} />
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2">
+            <div className="text-xs font-mono text-gray-500">
+              {refreshing ? 'syncing…' : 'live'}
+            </div>
+            <div className={`h-2 w-2 rounded-full ${refreshing ? 'bg-yellow-400' : 'bg-green-500'}`} />
+          </div>
+          <SeverityBadge severity={inc.severity} />
+        </div>
       </div>
 
       {/* Main Grid */}
@@ -134,7 +147,7 @@ export default function IncidentDetail() {
 
         {/* Right Column: Actions */}
         <div className="space-y-6">
-          <IncidentActions incident={inc} onUpdate={fetchIncident} />
+          <IncidentActions incident={inc} onUpdate={() => fetchIncident(false)} />
 
           {/* Quick Info */}
           <div className="card">
@@ -143,7 +156,7 @@ export default function IncidentDetail() {
               <p><strong>Session ID:</strong> <span className="font-mono text-xs">{formatHash(inc.session_id)}</span></p>
               <p><strong>Nodes:</strong> {incident.nodes_count}</p>
               <p><strong>Edges:</strong> {incident.edges_count}</p>
-              <p><strong>Severity:</strong> <SeverityBadge severity={inc.severity} /></p>
+              <p className="flex items-center gap-2"><strong>Severity:</strong> <SeverityBadge severity={inc.severity} /></p>
             </div>
           </div>
 

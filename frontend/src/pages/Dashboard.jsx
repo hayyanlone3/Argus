@@ -91,121 +91,165 @@ export default function Dashboard() {
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="space-y-6">
+    <div className="max-w-7xl mx-auto space-y-8 pb-10">
       {/* Header */}
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between">
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="text-slate-900 text-xl font-semibold tracking-wide">
-              ARGUS • Dashboard
-            </div>
-            <div className="text-slate-500 text-sm font-mono">
+            <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
+              ARGUS <span className="text-slate-300 mx-2">•</span> Dashboard
+            </h1>
+            <p className="text-slate-500 text-sm md:text-base font-medium mt-1">
               Provenance Graph Anomaly Detection • Live Monitoring
-            </div>
+            </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="text-xs font-mono text-slate-500">
-              {refreshing ? 'syncing…' : 'live'}
-            </div>
-            <div className={`h-2 w-2 rounded-full ${refreshing ? 'bg-yellow-400' : 'bg-green-500'}`} />
+          <div className="flex items-center gap-3 bg-slate-50 px-4 py-2 rounded-full border border-slate-200/60 shadow-inner">
+            <span className="text-xs font-bold tracking-wider text-slate-600 uppercase">
+              {refreshing ? 'Syncing...' : 'Live System'}
+            </span>
+            <span className="relative flex h-3 w-3">
+              {refreshing && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>}
+              <span className={`relative inline-flex rounded-full h-3 w-3 ${refreshing ? 'bg-yellow-500' : 'bg-emerald-500'}`}></span>
+            </span>
           </div>
         </div>
 
         {error && (
-          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-red-700 text-sm">
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 flex items-center gap-3 text-red-800 text-sm font-medium shadow-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-600" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
             {error}
           </div>
         )}
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
         {severityOrder.map((severity) => (
-          <div key={severity} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="text-xs text-slate-500 font-mono">{severity}</div>
-            <div className="text-3xl font-bold text-slate-900 mt-2">
-              {num(normalized.sevDist?.[severity], 0)}
+          <div 
+            key={severity} 
+            className={`rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col justify-between ${
+              severity === 'CRITICAL' ? 'border-l-4 border-l-red-500' :
+              severity === 'WARNING' ? 'border-l-4 border-l-amber-500' :
+              severity === 'UNKNOWN' ? 'border-l-4 border-l-slate-400' :
+              severity === 'BENIGN' ? 'border-l-4 border-l-emerald-500' : ''
+            }`}
+          >
+            <div className="text-xs font-bold text-slate-500 tracking-wider uppercase mb-3">
+              {severity}
             </div>
-            <div className="mt-2">
-              <SeverityBadge severity={severity} />
+            <div className="flex items-end justify-between">
+              <div className="text-4xl font-extrabold text-slate-900 tracking-tight">
+                {num(normalized.sevDist?.[severity], 0)}
+              </div>
+              <div className="mb-1">
+                <SeverityBadge severity={severity} />
+              </div>
             </div>
           </div>
         ))}
       </div>
 
       {/* Quick stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="text-xs text-slate-500 font-mono">MODEL MATURITY</div>
-          <div className="text-2xl font-bold text-slate-900 mt-2">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
+            </svg>
+            <div className="text-xs font-bold text-slate-500 tracking-wider uppercase">Model Maturity</div>
+          </div>
+          <div className="text-3xl font-extrabold text-slate-900 mt-1">
             {num(normalized.dataQuality, 0).toFixed(0)}%
           </div>
-          <div className="text-xs text-slate-500 mt-1">Analyst feedback rate (weekly)</div>
+          <div className="text-sm font-medium text-slate-500 mt-2">Analyst feedback rate (weekly)</div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="text-xs text-slate-500 font-mono">FALSE POSITIVE RATE</div>
-          <div className="text-2xl font-bold text-slate-900 mt-2">
+        <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-rose-500" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
+            </svg>
+            <div className="text-xs font-bold text-slate-500 tracking-wider uppercase">False Positive Rate</div>
+          </div>
+          <div className="text-3xl font-extrabold text-slate-900 mt-1">
             {num(normalized.fpRate, 0).toFixed(1)}%
           </div>
-          <div className="text-xs text-slate-500 mt-1">Weekly metric</div>
+          <div className="text-sm font-medium text-slate-500 mt-2">Weekly metric</div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="text-xs text-slate-500 font-mono">OPEN INCIDENTS</div>
-          <div className="text-2xl font-bold text-slate-900 mt-2">
+        <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+              <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clipRule="evenodd" />
+            </svg>
+            <div className="text-xs font-bold text-slate-500 tracking-wider uppercase">Open Incidents</div>
+          </div>
+          <div className="text-3xl font-extrabold text-slate-900 mt-1">
             {num(normalized.statusDist?.OPEN, 0)}
           </div>
-          <div className="text-xs text-slate-500 mt-1">Requires action</div>
+          <div className="text-sm font-medium text-slate-500 mt-2">Requires immediate action</div>
         </div>
       </div>
 
-      {/* Severity Filter */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          onClick={() => setSelectedSeverity(null)}
-          className={[
-            "px-4 py-2 rounded-lg text-sm font-medium border transition-colors shadow-sm",
-            selectedSeverity === null
-              ? "bg-slate-800 text-white border-slate-800"
-              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-          ].join(" ")}
-        >
-          All Incidents
-        </button>
+      {/* Main Content Area */}
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-md overflow-hidden">
+        {/* Feed Header & Filters */}
+        <div className="border-b border-slate-100 bg-slate-50/50 p-6">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+            <h2 className="text-xl font-bold text-slate-900">Incident Feed</h2>
+            <div className="bg-white rounded-md px-3 py-1.5 text-xs font-bold text-slate-600 tracking-wider border border-slate-200 shadow-sm uppercase">
+              {selectedSeverity ? `Filtered by: ${selectedSeverity}` : "Showing All Incidents"}
+            </div>
+          </div>
 
-        {severityOrder.map((sev) => (
-          <button
-            key={sev}
-            onClick={() => setSelectedSeverity(sev)}
-            className={[
-              "px-4 py-2 rounded-lg text-sm font-medium border transition-colors shadow-sm",
-              selectedSeverity === sev
-                ? "bg-slate-800 text-white border-slate-800"
-                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-            ].join(" ")}
-          >
-            {sev}
-          </button>
-        ))}
-      </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setSelectedSeverity(null)}
+              className={[
+                "px-5 py-2.5 rounded-lg text-sm font-bold border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2",
+                selectedSeverity === null
+                  ? "bg-blue-600 text-white border-blue-600 shadow-md focus:ring-blue-600"
+                  : "bg-white text-slate-600 border-slate-300 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-400 shadow-sm"
+              ].join(" ")}
+            >
+              All Incidents
+            </button>
 
-      {/* Incident Feed */}
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-slate-900 font-semibold">Incident Feed</div>
-          <div className="text-xs text-slate-500 font-mono">
-            {selectedSeverity ? `filter=${selectedSeverity}` : "filter=ALL"}
+            {severityOrder.map((sev) => (
+              <button
+                key={sev}
+                onClick={() => setSelectedSeverity(sev)}
+                className={[
+                  "px-5 py-2.5 rounded-lg text-sm font-bold border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2",
+                  selectedSeverity === sev
+                    ? "bg-blue-600 text-white border-blue-600 shadow-md focus:ring-blue-600"
+                    : "bg-white text-slate-600 border-slate-300 hover:bg-slate-100 hover:text-slate-900 hover:border-slate-400 shadow-sm"
+                ].join(" ")}
+              >
+                {sev}
+              </button>
+            ))}
           </div>
         </div>
-        <IncidentFeed severity={selectedSeverity} limit={20} />
+
+        {/* Feed Content */}
+        <div className="p-6 bg-white">
+          <IncidentFeed severity={selectedSeverity} limit={20} />
+        </div>
       </div>
 
-      {/* Tip */}
-      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
-        <div className="text-slate-700 text-sm">
-          <span className="font-semibold">Tip:</span> Click any incident card to view details, chain graph, and submit analyst feedback.
+      {/* Pro Tip */}
+      <div className="flex items-start gap-4 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5 shadow-sm">
+        <div className="flex-shrink-0 rounded-full bg-white p-2 shadow-sm border border-indigo-100">
+          <span className="text-xl leading-none block">💡</span>
+        </div>
+        <div className="text-indigo-900 text-sm font-medium pt-1">
+          <span className="font-extrabold tracking-wide uppercase text-xs text-indigo-600 bg-indigo-100/50 px-2 py-1 rounded mr-3 border border-indigo-200/50">Pro Tip</span>
+          Click any incident card above to view its deep-dive details, interactive event chain graph, and submit analyst feedback.
         </div>
       </div>
     </div>

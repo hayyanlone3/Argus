@@ -3,6 +3,8 @@ import os
 import math
 import threading
 import time
+import subprocess
+import hashlib
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, Optional
@@ -11,12 +13,16 @@ from shared.logger import setup_logger
 from layers.layer2_scoring.event_stream import EVENT_QUEUE, TelemetryEvent, to_dict
 from layers.layer4_response.isolation import IsolationService
 
+from database import connection
+from database.schemas import QuarantineCreate
+from layers.layer4_response.quarantine import QuarantineService
+
 logger = setup_logger(__name__)
 
 # Optional River ML import for Layer C
 RIVER_AVAILABLE = False
 try:
-    from river import anomaly
+    from river import anomaly  # type: ignore
     RIVER_AVAILABLE = True
 except Exception:
     RIVER_AVAILABLE = False
@@ -43,14 +49,35 @@ def clamp01(x: float) -> float:
 
 
 def squash01(raw: float) -> float:
-    """
-    Smoothly map unbounded-ish anomaly scores into [0,1]
-    """
+    # logistic squashing to [0,1]
     try:
-        # logistic squashing
         return clamp01(1.0 / (1.0 + math.exp(-raw)))
     except Exception:
         return 0.0
+
+
+# ---- Hashing ----
+def sha256_file(path: str, max_bytes: int = 50 * 1024 * 1024) -> Optional[str]:
+    """
+    Best-effort SHA256, capped to max_bytes to avoid heavy reads.
+    """
+    try:
+        if not path or not os.path.exists(path) or os.path.isdir(path):
+            return None
+        h = hashlib.sha256()
+        read_total = 0
+        with open(path, "rb") as f:
+            while True:
+                chunk = f.read(1024 * 1024)
+                if not chunk:
+                    break
+                h.update(chunk)
+                read_total += len(chunk)
+                if read_total >= max_bytes:
+                    break
+        return h.hexdigest()
+    except Exception:
+        return None
 
 
 # ---- Entropy ----
@@ -100,6 +127,70 @@ def record_write(proc: str, ts: float, window_sec: float = 10.0) -> int:
         return len(q)
 
 
+# ---- Auto Response (Kill Process) ----
+def try_kill_pid(pid: Optional[str]) -> bool:
+    if not pid:
+        return False
+    try:
+        # Windows taskkill (force)
+        subprocess.run(["taskkill", "/PID", str(pid), "/F"], capture_output=True, text=True)
+        return True
+    except Exception:
+        return False
+
+
+# ---- Auto Response (Quarantine) ----
+def try_quarantine_path(
+    original_path: Optional[str],
+    detection_layer: str,
+    confidence: float,
+    session_id: Optional[str] = None,
+    mitre_stage: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Best-effort quarantine using Layer4 QuarantineService.
+    Requires SessionLocal initialized via init_db().
+    """
+    if not original_path:
+        return {"quarantined": False, "reason": "path_missing"}
+
+    if connection.SessionLocal is None:
+        return {"quarantined": False, "reason": "db_not_initialized"}
+
+    file_hash = sha256_file(original_path)
+    if not file_hash:
+        return {"quarantined": False, "reason": "hash_failed"}
+
+    db = connection.SessionLocal()
+    try:
+        qc = QuarantineCreate(
+            original_path=original_path,
+            hash_sha256=file_hash,
+            detection_layer=detection_layer,
+            confidence=float(confidence),
+            session_id=session_id,
+            mitre_stage=mitre_stage,
+        )
+        q = QuarantineService.quarantine_file(original_path, db, qc)
+        return {
+            "quarantined": True,
+            "quarantine_id": getattr(q, "id", None),
+            "original_path": original_path,
+            "hash_sha256": file_hash,
+            "quarantine_path": getattr(q, "quarantine_path", None),
+            "status": getattr(q, "status", "QUARANTINED"),
+        }
+    except Exception as ex:
+        # QuarantineService already rolls back on DatabaseError, but keep response informative
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return {"quarantined": False, "reason": "exception", "error": str(ex), "hash_sha256": file_hash}
+    finally:
+        db.close()
+
+
 # ---------------------------
 # Layer A: Statistical
 # ---------------------------
@@ -110,7 +201,7 @@ def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
     # Only meaningful for file activity initially
     if evt.kind == "FILE_CREATE" and evt.target_path:
         # Entropy from disk (real signal)
-        ent = best_effort_file_entropy(evt.target_path, max_bytes=512 * 1024)
+        ent = best_effort_file_entropy(evt.target_path, max_bytes=int(os.getenv("ARGUS_ENTROPY_MAX_BYTES", "524288")))
         if ent is not None:
             evt.file_entropy = ent  # attach for UI/other layers
             if ent >= 7.9:
@@ -123,11 +214,11 @@ def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
                 reasons.append(f"entropy={ent:.2f}")
 
         # Burst: many writes in short window by same process image
-        rate = record_write(evt.child_process or "", evt.ts, window_sec=10.0)
-        if rate >= 20:
+        rate = record_write(evt.child_process or "", evt.ts, window_sec=float(os.getenv("ARGUS_WRITE_WINDOW_SEC", "10")))
+        if rate >= int(os.getenv("ARGUS_WRITE_BURST_HI", "20")):
             score += 0.35
             reasons.append(f"write_burst_10s={rate}")
-        elif rate >= 10:
+        elif rate >= int(os.getenv("ARGUS_WRITE_BURST_LO", "10")):
             score += 0.20
             reasons.append(f"write_spike_10s={rate}")
 
@@ -224,13 +315,13 @@ def score_layer_c(evt: TelemetryEvent, a_score: float, b_score: float) -> Dict[s
 def fuse(a: float, b: float, c: float) -> Dict[str, Any]:
     a, b, c = clamp01(a), clamp01(b), clamp01(c)
 
-    # hard override
-    if b > 0.7 and c > 0.7:
-        return {"decision": "MALWARE ALERT", "final_score": 1.0, "rule": "B>0.7 & C>0.7 override"}
+    # hard override (strong confidence pattern)
+    if b > 0.85 and c > 0.70:
+        return {"decision": "MALWARE ALERT", "final_score": 1.0, "rule": "B>0.85 & C>0.70 override"}
 
     final = 0.4 * a + 0.3 * b + 0.3 * c
 
-    if final >= 0.75:
+    if final >= 0.80:
         dec = "MALWARE ALERT"
     elif final >= 0.50:
         dec = "SUSPICIOUS"
@@ -238,6 +329,26 @@ def fuse(a: float, b: float, c: float) -> Dict[str, Any]:
         dec = "NORMAL"
 
     return {"decision": dec, "final_score": round(final, 3), "rule": "weighted_sum"}
+
+
+def _child_is_lolbin(evt: TelemetryEvent) -> bool:
+    child = (evt.child_process or "").lower()
+    # basic LOLBins / shells
+    for name in (
+        "\\cmd.exe",
+        "\\powershell.exe",
+        "\\pwsh.exe",
+        "\\wscript.exe",
+        "\\cscript.exe",
+        "\\mshta.exe",
+        "\\rundll32.exe",
+        "\\regsvr32.exe",
+        "\\certutil.exe",
+        "\\bitsadmin.exe",
+    ):
+        if child.endswith(name):
+            return True
+    return False
 
 
 class Layer2RuntimeEngine:
@@ -262,6 +373,15 @@ class Layer2RuntimeEngine:
         logger.info("🛑 Layer2RuntimeEngine stopped")
 
     def _run(self):
+        global _ML_SEEN
+
+        warmup = int(os.getenv("ARGUS_ML_WARMUP_EVENTS", "500"))
+        auto_kill = os.getenv("ARGUS_AUTO_KILL_ON_ALERT", "false").lower() == "true"
+
+        # fast path thresholds (immediate containment without waiting for ML warmup)
+        fast_a = float(os.getenv("ARGUS_FAST_A_ALERT", "0.85"))
+        fast_b = float(os.getenv("ARGUS_FAST_B_ALERT", "0.90"))
+
         while not self._stop.is_set():
             try:
                 evt: TelemetryEvent = EVENT_QUEUE.get(timeout=0.5)
@@ -276,49 +396,75 @@ class Layer2RuntimeEngine:
                 a = fa.result(timeout=1.0)
                 b = fb.result(timeout=1.0)
 
-                # C depends on A/B (features include them)
+                # C uses A/B
                 c = score_layer_c(evt, a_score=a["score"], b_score=b["score"])
 
                 fused = fuse(a["score"], b["score"], c["score"])
 
-                # Auto Kill logic for MALWARE ALERT
-                auto_kill = os.getenv("ARGUS_AUTO_KILL_ON_ALERT", "false").lower() == "true"
-                warmup = int(os.getenv("ARGUS_ML_WARMUP_EVENTS", "200"))
-                ml_ready = True
+                # Auto-response logic
+                ml_ready = (not RIVER_AVAILABLE) or (_ML_MODEL is None) or (_ML_SEEN >= warmup)
+
+                # Immediate kill conditions (no warmup needed):
+                # - ransomware-ish (A very high)
+                # - rare + suspicious lolbin child (B very high + child in lolbins)
+                fast_path = False
+                fast_reason = None
+                if a["score"] >= fast_a:
+                    fast_path = True
+                    fast_reason = "fast_path_A_high"
+                elif b["score"] >= fast_b and _child_is_lolbin(evt):
+                    fast_path = True
+                    fast_reason = "fast_path_B_rare_lolbin"
+
+                should_kill = False
                 
-                # If River is present, require warmup
-                if RIVER_AVAILABLE and _ML_MODEL is not None:
-                    ml_ready = _ML_SEEN >= warmup
-                
-                if auto_kill and ml_ready and fused.get("decision") == "MALWARE ALERT":
+                # Fast-path containment triggers immediately (do not wait for ML warmup)
+                if fast_path:
+                    should_kill = True
+                # Otherwise require full MALWARE ALERT + ML readiness (when ML is present)
+                elif fused.get("decision") == "MALWARE ALERT":
+                    should_kill = ml_ready
+
+                killed = False
+                err = None
+                if auto_kill and should_kill:
                     pid = evt.child_pid
-                    killed = False
-                    err = None
                     if pid:
                         try:
                             killed = IsolationService.kill_process(int(pid), force=True)
                         except Exception as ex:
                             err = str(ex)
-                
-                    fused["auto_response"] = {
-                        "action": "kill_child",
-                        "enabled": True,
-                        "ml_ready": ml_ready,
-                        "warmup": warmup,
-                        "child_pid": pid,
-                        "child_process": evt.child_process,
-                        "child_cmd": evt.child_cmd,
-                        "killed": bool(killed),
-                        "error": err,
-                    }
-                else:
-                    fused["auto_response"] = {
-                        "action": "kill_child",
-                        "enabled": auto_kill,
-                        "ml_ready": ml_ready,
-                        "warmup": warmup,
-                        "killed": False,
-                    }
+                    else:
+                        err = "child_pid_missing"
+
+                quarantine_result = {"quarantined": False, "reason": "not_attempted"}
+                # If containment triggers and event contains a file path, quarantine it immediately.
+                # Most relevant for FILE_CREATE events (evt.target_path).
+                if auto_kill and should_kill and evt.target_path:
+                    quarantine_result = try_quarantine_path(
+                        original_path=evt.target_path,
+                        detection_layer="Layer2_Containment",
+                        confidence=1.0 if fused.get("decision") == "MALWARE ALERT" else 0.8,
+                        session_id=evt.session_id,
+                        mitre_stage=None,
+                    )
+
+                fused["auto_response"] = {
+                    "enabled": auto_kill,
+                    "action": "kill_child",
+                    "should_kill": bool(auto_kill and should_kill),
+                    "killed": bool(killed),
+                    "error": err,
+                    "quarantine": quarantine_result,
+                    "ml_ready": bool(ml_ready),
+                    "warmup_events": warmup,
+                    "ml_seen": _ML_SEEN,
+                    "fast_path": bool(fast_path),
+                    "fast_reason": fast_reason,
+                    "child_pid": evt.child_pid,
+                    "child_process": evt.child_process,
+                    "child_cmd": evt.child_cmd,
+                }
 
                 payload = {
                     "event": to_dict(evt),
@@ -329,13 +475,12 @@ class Layer2RuntimeEngine:
 
                 with LATEST_LOCK:
                     LATEST_DECISIONS[evt.event_id] = payload
-                    # keep memory bounded
                     if len(LATEST_DECISIONS) > 2000:
-                        # drop oldest (simple)
                         for k in list(LATEST_DECISIONS.keys())[:500]:
                             LATEST_DECISIONS.pop(k, None)
 
             except Exception:
                 logger.exception("❌ Layer2RuntimeEngine event processing failed")
 
+                
 # parallel, non-blocking and safe because it doesn’t writes DB. 

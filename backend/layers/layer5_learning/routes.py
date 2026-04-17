@@ -17,6 +17,8 @@ logger = setup_logger(__name__)
 
 router = APIRouter()
 
+_STATS_CACHE = {"ts": None, "payload": None}
+_STATS_CACHE_TTL_SEC = 60
 
 @router.get("/health")
 async def health():
@@ -44,17 +46,17 @@ async def get_learning_stats(db: Session = Depends(get_db)):
         GET /api/layer5/stats
     """
     try:
-        # Get data from past week
+        now = datetime.utcnow()
+        ts = _STATS_CACHE["ts"]
+        if ts and (now - ts).total_seconds() < _STATS_CACHE_TTL_SEC and _STATS_CACHE["payload"]:
+            return _STATS_CACHE["payload"]
+
         weekly_data = RetrainingService.get_weekly_data(db, days=7)
-        
-        # Get all-time data
         all_incidents = db.query(Incident).count()
         all_feedbacks = db.query(Feedback).count()
-        
-        # Evaluate quality
         quality = RetrainingService.evaluate_model_quality(weekly_data)
-        
-        return {
+
+        payload = {
             "weekly_stats": {
                 "incidents": len(weekly_data["incidents"]),
                 "feedbacks": len(weekly_data["feedbacks"]),
@@ -71,7 +73,11 @@ async def get_learning_stats(db: Session = Depends(get_db)):
             "model_quality": quality,
             "schedule": "Every Friday at 23:00 UTC"
         }
-    
+
+        _STATS_CACHE["ts"] = now
+        _STATS_CACHE["payload"] = payload
+        return payload
+
     except Exception as e:
         logger.error(f"❌ Failed to get stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))

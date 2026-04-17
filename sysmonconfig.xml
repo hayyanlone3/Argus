@@ -1,23 +1,44 @@
 <Sysmon schemaversion="4.91">
   <EventFiltering>
 
-    <!-- Process Creation -->
     <!-- Process Creation (reduced noise, security-relevant children) -->
-<ProcessCreate onmatch="include">
-  <Image condition="end with">cmd.exe</Image>
-  <Image condition="end with">powershell.exe</Image>
-  <Image condition="end with">pwsh.exe</Image>
-  <Image condition="end with">wscript.exe</Image>
-  <Image condition="end with">cscript.exe</Image>
-  <Image condition="end with">mshta.exe</Image>
-  <Image condition="end with">rundll32.exe</Image>
-  <Image condition="end with">regsvr32.exe</Image>
-  <Image condition="end with">certutil.exe</Image>
-  <Image condition="end with">bitsadmin.exe</Image>
-</ProcessCreate>
+    <ProcessCreate onmatch="include">
+      <Image condition="end with">cmd.exe</Image>
+      <Image condition="end with">powershell.exe</Image>
+      <Image condition="end with">pwsh.exe</Image>
+      <Image condition="end with">wscript.exe</Image>
+      <Image condition="end with">cscript.exe</Image>
+      <Image condition="end with">mshta.exe</Image>
+      <Image condition="end with">rundll32.exe</Image>
+      <Image condition="end with">regsvr32.exe</Image>
+      <Image condition="end with">certutil.exe</Image>
+      <Image condition="end with">bitsadmin.exe</Image>
+    </ProcessCreate>
 
     <!-- File Creation (IMPORTANT) -->
+    <!-- Optimized: high-signal malware-relevant file types (low noise) -->
     <FileCreate onmatch="include">
+      <TargetFilename condition="end with">.exe</TargetFilename>
+      <TargetFilename condition="end with">.dll</TargetFilename>
+      <TargetFilename condition="end with">.sys</TargetFilename>
+      <TargetFilename condition="end with">.scr</TargetFilename>
+      <TargetFilename condition="end with">.com</TargetFilename>
+
+      <TargetFilename condition="end with">.ps1</TargetFilename>
+      <TargetFilename condition="end with">.psm1</TargetFilename>
+      <TargetFilename condition="end with">.vbs</TargetFilename>
+      <TargetFilename condition="end with">.js</TargetFilename>
+      <TargetFilename condition="end with">.jse</TargetFilename>
+      <TargetFilename condition="end with">.wsf</TargetFilename>
+      <TargetFilename condition="end with">.hta</TargetFilename>
+      <TargetFilename condition="end with">.bat</TargetFilename>
+      <TargetFilename condition="end with">.cmd</TargetFilename>
+      <TargetFilename condition="end with">.lnk</TargetFilename>
+
+      <TargetFilename condition="end with">.docm</TargetFilename>
+      <TargetFilename condition="end with">.xlsm</TargetFilename>
+      <TargetFilename condition="end with">.pptm</TargetFilename>
+
       <TargetFilename condition="end with">.txt</TargetFilename>
     </FileCreate>
 

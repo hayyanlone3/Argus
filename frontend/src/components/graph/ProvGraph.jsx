@@ -1,3 +1,4 @@
+// src/components/graph/ProvGraph.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import { graphService } from '../../services/graphService';
 import LoadingSpinner from '../common/LoadingSpinner';
@@ -37,6 +38,7 @@ export default function ProvGraph() {
   const [viewEdges, setViewEdges] = useState([]);
 
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
 
   const [selectedNodeId, setSelectedNodeId] = useState(null);
@@ -64,32 +66,65 @@ export default function ProvGraph() {
     const nodesArr = Array.isArray(nodesData) ? nodesData : (nodesData?.nodes || []);
     const edgesArr = Array.isArray(edgesData) ? edgesData : (edgesData?.edges || []);
 
-    setAllNodes(nodesArr);
-    setAllEdges(edgesArr);
+    // Cheap signatures to avoid re-layout flicker
+    const nodesSig = `${nodesArr.length}:${nodesArr[0]?.id || ''}:${nodesArr[nodesArr.length - 1]?.id || ''}`;
+    const edgesSig = `${edgesArr.length}:${edgesArr[0]?.id || ''}:${edgesArr[edgesArr.length - 1]?.id || ''}`;
+    const sig = `${nodesSig}|${edgesSig}`;
 
-    // default view = full
-    setViewNodes(nodesArr);
-    setViewEdges(edgesArr);
+    setAllNodes((prev) => {
+      const prevSig = `${prev.length}:${prev[0]?.id || ''}:${prev[prev.length - 1]?.id || ''}`;
+      return prevSig === nodesSig ? prev : nodesArr;
+    });
+
+    setAllEdges((prev) => {
+      const prevSig = `${prev.length}:${prev[0]?.id || ''}:${prev[prev.length - 1]?.id || ''}`;
+      return prevSig === edgesSig ? prev : edgesArr;
+    });
+
+    // default view = full (only if not focused)
+    setViewNodes((prev) => (selectedNodeId ? prev : nodesArr));
+    setViewEdges((prev) => (selectedNodeId ? prev : edgesArr));
+
+    return sig;
   };
 
   useEffect(() => {
-    const run = async () => {
+    let mounted = true;
+    let lastSig = "";
+
+    const run = async (initial = false) => {
       try {
-        setLoading(true);
-        await fetchGraph();
-        setError(null);
+        if (initial) setLoading(true);
+        else {
+            setRefreshing(true);
+            setError(null);
+        }
+
+        const sig = await fetchGraph();
+
+        // Build a cheap signature so we don't update state if nothing changed
+        // (prevents D3 graph from re-layouting constantly)
+        if (mounted && sig !== lastSig) {
+          lastSig = sig;
+        }
       } catch (err) {
+        if (!mounted) return;
         setError(err.message);
       } finally {
-        setLoading(false);
+        if (!mounted) return;
+        if (initial) setLoading(false);
+        else setRefreshing(false);
       }
     };
 
-    run();
-    const interval = setInterval(run, 15000);
-    return () => clearInterval(interval);
+    run(true);
+    const interval = setInterval(() => run(false), 30000); // was 15000; reduce load
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [selectedNodeId]); // Re-bind closure to correctly check selectedNodeId in fetchGraph
 
   const onToggleEdgeType = (t) => {
     setEdgeTypeFilter(prev => {
@@ -140,7 +175,10 @@ export default function ProvGraph() {
     <div className="card">
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h3 className="font-bold text-lg">Provenance Graph</h3>
+          <div className="flex items-center gap-3">
+              <h3 className="font-bold text-lg">Provenance Graph</h3>
+              {refreshing && <span className="text-xs font-mono text-gray-400">syncing...</span>}
+          </div>
           <div className="text-xs text-gray-500">
             Click a node to focus its 2-hop neighborhood (stable: does not shrink permanently).
           </div>

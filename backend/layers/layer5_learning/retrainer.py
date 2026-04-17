@@ -62,8 +62,8 @@ class RetrainingService:
             # Data quality: % of incidents with feedback
             data_quality = (total_feedback / len(incidents) * 100) if incidents else 0
             
-            logger.info(f"📊 Weekly data: {len(incidents)} incidents, {tp_count} TP, {fp_count} FP, {unknown_count} UNKNOWN")
-            logger.info(f"   FP rate: {fp_rate:.1f}%, Data quality: {data_quality:.1f}%")
+            logger.debug(f"📊 Weekly data: {len(incidents)} incidents, {tp_count} TP, {fp_count} FP, {unknown_count} UNKNOWN")
+            logger.debug(f"   FP rate: {fp_rate:.1f}%, Data quality: {data_quality:.1f}%")
             
             return {
                 "incidents": incidents,

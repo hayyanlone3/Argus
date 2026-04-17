@@ -10,22 +10,30 @@ export default function Layer1Dashboard() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchStats = async () => {
+    let mounted = true;
+
+    const fetchStats = async (initial = false) => {
       try {
-        setLoading(true);
+        if (initial) setLoading(true);
         const data = await graphService.getStats();
+        if (!mounted) return;
         setStats(data);
         setError(null);
       } catch (err) {
+        if (!mounted) return;
         setError(err.message);
       } finally {
-        setLoading(false);
+        if (!mounted) return;
+        if (initial) setLoading(false);
       }
     };
 
-    fetchStats();
-    const interval = setInterval(fetchStats, 20000);
-    return () => clearInterval(interval);
+    fetchStats(true);
+    const interval = setInterval(() => fetchStats(false), 20000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   if (loading) return <LoadingSpinner />;

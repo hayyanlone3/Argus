@@ -251,6 +251,85 @@ export default function Layer2Dashboard() {
                 </div>
               </div>
 
+              <div className="rounded-lg border border-slate-200 bg-white p-3">
+                <div className="text-xs text-slate-500 font-mono mb-2">AUTO RESPONSE</div>
+
+                {selected?.fusion?.auto_response ? (
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-600 font-mono">enabled</span>
+                      <span className="font-mono text-slate-900">
+                        {String(selected.fusion.auto_response.enabled)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-600 font-mono">should_kill</span>
+                      <span className="font-mono text-slate-900">
+                        {String(selected.fusion.auto_response.should_kill)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-600 font-mono">killed</span>
+                      <span className={`font-mono ${selected.fusion.auto_response.killed ? 'text-red-700' : 'text-slate-900'}`}>
+                        {String(selected.fusion.auto_response.killed)}
+                      </span>
+                    </div>
+
+                    {selected.fusion.auto_response.fast_path !== undefined && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-600 font-mono">fast_path</span>
+                        <span className="font-mono text-slate-900">
+                          {String(selected.fusion.auto_response.fast_path)} {selected.fusion.auto_response.fast_reason ? `(${selected.fusion.auto_response.fast_reason})` : ''}
+                        </span>
+                      </div>
+                    )}
+
+                    {selected.fusion.auto_response.child_pid && (
+                      <div className="text-slate-700">
+                        {mono(`child_pid: ${selected.fusion.auto_response.child_pid}`)}
+                      </div>
+                    )}
+                    {selected.fusion.auto_response.child_process && (
+                      <div className="text-slate-700">
+                        {mono(`child_process: ${selected.fusion.auto_response.child_process}`)}
+                      </div>
+                    )}
+
+                    {selected?.fusion?.auto_response?.quarantine && (
+                      <div className="mt-2 rounded-md border border-slate-200 bg-slate-50 p-2">
+                        <div className="text-[10px] text-slate-500 font-mono mb-1">QUARANTINE</div>
+                        <div className="text-slate-700">
+                          {mono(`quarantined: ${String(selected.fusion.auto_response.quarantine.quarantined)}`)}
+                        </div>
+                        {selected.fusion.auto_response.quarantine.original_path && (
+                          <div className="text-slate-700">
+                            {mono(`original_path: ${selected.fusion.auto_response.quarantine.original_path}`)}
+                          </div>
+                        )}
+                        {selected.fusion.auto_response.quarantine.quarantine_path && (
+                          <div className="text-slate-700">
+                            {mono(`quarantine_path: ${selected.fusion.auto_response.quarantine.quarantine_path}`)}
+                          </div>
+                        )}
+                        {selected.fusion.auto_response.quarantine.reason && (
+                          <div className="text-slate-500">
+                            {mono(`reason: ${selected.fusion.auto_response.quarantine.reason}`)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {selected.fusion.auto_response.error && (
+                      <div className="text-red-700">{mono(`error: ${selected.fusion.auto_response.error}`)}</div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-slate-500 text-sm">—</div>
+                )}
+              </div>
+
               <button
                 onClick={() => fetchLatest(false)}
                 className="w-full px-3 py-2 rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition-colors text-sm font-semibold shadow-sm"
