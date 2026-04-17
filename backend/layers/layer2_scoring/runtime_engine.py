@@ -9,15 +9,49 @@ from typing import Dict, Any, Optional
 
 from shared.logger import setup_logger
 from layers.layer2_scoring.event_stream import EVENT_QUEUE, TelemetryEvent, to_dict
+from layers.layer4_response.isolation import IsolationService
 
 logger = setup_logger(__name__)
+
+# Optional River ML import for Layer C
+RIVER_AVAILABLE = False
+try:
+    from river import anomaly
+    RIVER_AVAILABLE = True
+except Exception:
+    RIVER_AVAILABLE = False
+
+_ML_LOCK = threading.Lock()
+_ML_MODEL = None
+_ML_SEEN = 0
+
+if RIVER_AVAILABLE:
+    _ML_MODEL = anomaly.HalfSpaceTrees(
+        n_trees=int(os.getenv("ARGUS_RIVER_TREES", "25")),
+        height=int(os.getenv("ARGUS_RIVER_HEIGHT", "15")),
+        window_size=int(os.getenv("ARGUS_RIVER_WINDOW", "250")),
+        seed=int(os.getenv("ARGUS_RIVER_SEED", "42")),
+    )
 
 # In-memory latest results (safe start; DB persistence can come later)
 LATEST_DECISIONS: Dict[str, Dict[str, Any]] = {}  # event_id -> payload
 LATEST_LOCK = threading.Lock()
 
+
 def clamp01(x: float) -> float:
     return max(0.0, min(1.0, float(x)))
+
+
+def squash01(raw: float) -> float:
+    """
+    Smoothly map unbounded-ish anomaly scores into [0,1]
+    """
+    try:
+        # logistic squashing
+        return clamp01(1.0 / (1.0 + math.exp(-raw)))
+    except Exception:
+        return 0.0
+
 
 # ---- Entropy ----
 def shannon_entropy_bytes(data: bytes) -> float:
@@ -33,6 +67,7 @@ def shannon_entropy_bytes(data: bytes) -> float:
             p = c / n
             ent -= p * math.log2(p)
     return ent
+
 
 def best_effort_file_entropy(path: str, max_bytes: int = 1024 * 1024) -> Optional[float]:
     try:
@@ -98,6 +133,7 @@ def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
 
     return {"score": clamp01(score), "reasons": reasons}
 
+
 # ---------------------------
 # Layer B: P-matrix
 # ---------------------------
@@ -145,15 +181,42 @@ def score_layer_b(evt: TelemetryEvent) -> Dict[str, Any]:
         reasons.append("rare_transition")
     return {"score": s, "reasons": reasons}
 
+
 # ---------------------------
-# Layer C: Online ML (placeholder-safe)
+# Layer C: Online ML
 # ---------------------------
-def score_layer_c(evt: TelemetryEvent) -> Dict[str, Any]:
-    """
-    Safe placeholder that returns 0 until River model is wired in.
-    This keeps the system stable while we add River next.
-    """
-    return {"score": 0.0, "reasons": ["ml_not_enabled_yet"]}
+def layer_c_features(evt: TelemetryEvent, a_score: float, b_score: float) -> Dict[str, float]:
+    kind = evt.kind or ""
+    child = (evt.child_process or "").lower()
+
+    # A tiny feature set that is available now, without needing full graph features yet.
+    # We can extend later with degree/depth/density once you compute them.
+    return {
+        "is_process_create": 1.0 if kind == "PROCESS_CREATE" else 0.0,
+        "is_file_create": 1.0 if kind == "FILE_CREATE" else 0.0,
+        "is_reg_set": 1.0 if kind == "REG_SET" else 0.0,
+        "a_score": float(a_score),
+        "b_score": float(b_score),
+        "entropy": float(evt.file_entropy or 0.0),
+        "child_is_cmd": 1.0 if child.endswith("\\cmd.exe") else 0.0,
+        "child_is_powershell": 1.0 if child.endswith("\\powershell.exe") else 0.0,
+    }
+
+def score_layer_c(evt: TelemetryEvent, a_score: float, b_score: float) -> Dict[str, Any]:
+    global _ML_SEEN
+
+    if not RIVER_AVAILABLE or _ML_MODEL is None:
+        return {"score": 0.0, "reasons": ["river_not_installed"]}
+
+    feats = layer_c_features(evt, a_score=a_score, b_score=b_score)
+
+    with _ML_LOCK:
+        raw = float(_ML_MODEL.score_one(feats))
+        _ML_MODEL.learn_one(feats)
+        _ML_SEEN += 1
+
+    return {"score": squash01(raw), "reasons": ["river_halfspacetrees"], "raw": raw, "seen": _ML_SEEN}
+
 
 # ---------------------------
 # Fusion
@@ -175,6 +238,7 @@ def fuse(a: float, b: float, c: float) -> Dict[str, Any]:
         dec = "NORMAL"
 
     return {"decision": dec, "final_score": round(final, 3), "rule": "weighted_sum"}
+
 
 class Layer2RuntimeEngine:
     def __init__(self):
@@ -205,16 +269,56 @@ class Layer2RuntimeEngine:
                 continue
 
             try:
-                # Parallel scoring (non-blocking ingestion is preserved because sysmon only enqueues)
+                # A and B in parallel
                 fa = self._pool.submit(score_layer_a, evt)
                 fb = self._pool.submit(score_layer_b, evt)
-                fc = self._pool.submit(score_layer_c, evt)
 
                 a = fa.result(timeout=1.0)
                 b = fb.result(timeout=1.0)
-                c = fc.result(timeout=1.0)
+
+                # C depends on A/B (features include them)
+                c = score_layer_c(evt, a_score=a["score"], b_score=b["score"])
 
                 fused = fuse(a["score"], b["score"], c["score"])
+
+                # Auto Kill logic for MALWARE ALERT
+                auto_kill = os.getenv("ARGUS_AUTO_KILL_ON_ALERT", "false").lower() == "true"
+                warmup = int(os.getenv("ARGUS_ML_WARMUP_EVENTS", "200"))
+                ml_ready = True
+                
+                # If River is present, require warmup
+                if RIVER_AVAILABLE and _ML_MODEL is not None:
+                    ml_ready = _ML_SEEN >= warmup
+                
+                if auto_kill and ml_ready and fused.get("decision") == "MALWARE ALERT":
+                    pid = evt.child_pid
+                    killed = False
+                    err = None
+                    if pid:
+                        try:
+                            killed = IsolationService.kill_process(int(pid), force=True)
+                        except Exception as ex:
+                            err = str(ex)
+                
+                    fused["auto_response"] = {
+                        "action": "kill_child",
+                        "enabled": True,
+                        "ml_ready": ml_ready,
+                        "warmup": warmup,
+                        "child_pid": pid,
+                        "child_process": evt.child_process,
+                        "child_cmd": evt.child_cmd,
+                        "killed": bool(killed),
+                        "error": err,
+                    }
+                else:
+                    fused["auto_response"] = {
+                        "action": "kill_child",
+                        "enabled": auto_kill,
+                        "ml_ready": ml_ready,
+                        "warmup": warmup,
+                        "killed": False,
+                    }
 
                 payload = {
                     "event": to_dict(evt),

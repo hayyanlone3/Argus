@@ -87,3 +87,13 @@ htmlcov/
 *.temp
 tmp/
 temp/
+
+# Ignore Sysmon executables
+Sysmon.exe
+Sysmon64.exe
+Sysmon64a.exe
+
+# Ignore configuration and local docs
+Eula.txt
+query
+sysmonconfig.xml

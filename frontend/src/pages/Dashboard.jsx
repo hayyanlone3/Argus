@@ -93,27 +93,27 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="rounded-xl border border-slate-700/60 bg-slate-900 p-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-slate-100 text-xl font-semibold tracking-wide">
+            <div className="text-slate-900 text-xl font-semibold tracking-wide">
               ARGUS • Dashboard
             </div>
-            <div className="text-slate-400 text-sm font-mono">
+            <div className="text-slate-500 text-sm font-mono">
               Provenance Graph Anomaly Detection • Live Monitoring
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="text-xs font-mono text-slate-400">
+            <div className="text-xs font-mono text-slate-500">
               {refreshing ? 'syncing…' : 'live'}
             </div>
-            <div className={`h-2 w-2 rounded-full ${refreshing ? 'bg-yellow-400' : 'bg-green-400'}`} />
+            <div className={`h-2 w-2 rounded-full ${refreshing ? 'bg-yellow-400' : 'bg-green-500'}`} />
           </div>
         </div>
 
         {error && (
-          <div className="mt-3 rounded-lg border border-red-500/40 bg-red-950/30 p-3 text-red-200 text-sm">
+          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-red-700 text-sm">
             {error}
           </div>
         )}
@@ -122,9 +122,9 @@ export default function Dashboard() {
       {/* KPI cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {severityOrder.map((severity) => (
-          <div key={severity} className="rounded-xl border border-slate-700/60 bg-slate-950 p-4">
-            <div className="text-xs text-slate-400 font-mono">{severity}</div>
-            <div className="text-3xl font-bold text-slate-100 mt-2">
+          <div key={severity} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="text-xs text-slate-500 font-mono">{severity}</div>
+            <div className="text-3xl font-bold text-slate-900 mt-2">
               {num(normalized.sevDist?.[severity], 0)}
             </div>
             <div className="mt-2">
@@ -136,28 +136,28 @@ export default function Dashboard() {
 
       {/* Quick stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="rounded-xl border border-slate-700/60 bg-slate-950 p-4">
-          <div className="text-xs text-slate-400 font-mono">MODEL MATURITY</div>
-          <div className="text-2xl font-bold text-slate-100 mt-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="text-xs text-slate-500 font-mono">MODEL MATURITY</div>
+          <div className="text-2xl font-bold text-slate-900 mt-2">
             {num(normalized.dataQuality, 0).toFixed(0)}%
           </div>
-          <div className="text-xs text-slate-400 mt-1">Analyst feedback rate (weekly)</div>
+          <div className="text-xs text-slate-500 mt-1">Analyst feedback rate (weekly)</div>
         </div>
 
-        <div className="rounded-xl border border-slate-700/60 bg-slate-950 p-4">
-          <div className="text-xs text-slate-400 font-mono">FALSE POSITIVE RATE</div>
-          <div className="text-2xl font-bold text-slate-100 mt-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="text-xs text-slate-500 font-mono">FALSE POSITIVE RATE</div>
+          <div className="text-2xl font-bold text-slate-900 mt-2">
             {num(normalized.fpRate, 0).toFixed(1)}%
           </div>
-          <div className="text-xs text-slate-400 mt-1">Weekly metric</div>
+          <div className="text-xs text-slate-500 mt-1">Weekly metric</div>
         </div>
 
-        <div className="rounded-xl border border-slate-700/60 bg-slate-950 p-4">
-          <div className="text-xs text-slate-400 font-mono">OPEN INCIDENTS</div>
-          <div className="text-2xl font-bold text-slate-100 mt-2">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="text-xs text-slate-500 font-mono">OPEN INCIDENTS</div>
+          <div className="text-2xl font-bold text-slate-900 mt-2">
             {num(normalized.statusDist?.OPEN, 0)}
           </div>
-          <div className="text-xs text-slate-400 mt-1">Requires action</div>
+          <div className="text-xs text-slate-500 mt-1">Requires action</div>
         </div>
       </div>
 
@@ -166,10 +166,10 @@ export default function Dashboard() {
         <button
           onClick={() => setSelectedSeverity(null)}
           className={[
-            "px-4 py-2 rounded-lg text-sm font-medium border",
+            "px-4 py-2 rounded-lg text-sm font-medium border transition-colors shadow-sm",
             selectedSeverity === null
-              ? "bg-slate-100 text-slate-900 border-slate-100"
-              : "bg-slate-900 text-slate-200 border-slate-700/60 hover:bg-slate-800"
+              ? "bg-slate-800 text-white border-slate-800"
+              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
           ].join(" ")}
         >
           All Incidents
@@ -180,10 +180,10 @@ export default function Dashboard() {
             key={sev}
             onClick={() => setSelectedSeverity(sev)}
             className={[
-              "px-4 py-2 rounded-lg text-sm font-medium border",
+              "px-4 py-2 rounded-lg text-sm font-medium border transition-colors shadow-sm",
               selectedSeverity === sev
-                ? "bg-slate-100 text-slate-900 border-slate-100"
-                : "bg-slate-900 text-slate-200 border-slate-700/60 hover:bg-slate-800"
+                ? "bg-slate-800 text-white border-slate-800"
+                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
             ].join(" ")}
           >
             {sev}
@@ -192,10 +192,10 @@ export default function Dashboard() {
       </div>
 
       {/* Incident Feed */}
-      <div className="rounded-xl border border-slate-700/60 bg-slate-950 p-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex items-center justify-between mb-3">
-          <div className="text-slate-100 font-semibold">Incident Feed</div>
-          <div className="text-xs text-slate-400 font-mono">
+          <div className="text-slate-900 font-semibold">Incident Feed</div>
+          <div className="text-xs text-slate-500 font-mono">
             {selectedSeverity ? `filter=${selectedSeverity}` : "filter=ALL"}
           </div>
         </div>
@@ -203,8 +203,8 @@ export default function Dashboard() {
       </div>
 
       {/* Tip */}
-      <div className="rounded-xl border border-slate-700/60 bg-slate-900 p-4">
-        <div className="text-slate-200 text-sm">
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 shadow-sm">
+        <div className="text-slate-700 text-sm">
           <span className="font-semibold">Tip:</span> Click any incident card to view details, chain graph, and submit analyst feedback.
         </div>
       </div>
