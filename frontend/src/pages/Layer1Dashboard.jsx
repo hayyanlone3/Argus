@@ -39,49 +39,71 @@ export default function Layer1Dashboard() {
   if (loading) return <LoadingSpinner />;
 
   return (
-    <div className="space-y-6 bg-gray-100 min-h-screen p-6">
+    <div className="max-w-7xl mx-auto space-y-8 pb-10">
       {/* Header */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-6 h-6 bg-green-500 rounded flex items-center justify-center text-white text-sm">
-            ✓
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 shadow-sm border border-emerald-200">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
+                Layer 1 <span className="text-slate-300 mx-2">•</span> Graph Engine
+              </h1>
+            </div>
+            <p className="text-slate-500 text-sm md:text-base font-medium ml-11">
+              Provenance graph construction and event correlation
+            </p>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">Layer 1: Graph Engine</h1>
         </div>
-        <p className="text-gray-600 text-sm">Provenance graph construction and event correlation</p>
+
+        {error && (
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 flex items-center gap-3 text-red-800 text-sm font-medium shadow-sm">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-red-600" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            {error}
+          </div>
+        )}
       </div>
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="metric-card">
-            <div className="metric-label">Total Nodes</div>
-            <div className="metric-value">{stats.total_nodes || 0}</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <div className="text-xs font-bold text-slate-500 tracking-wider uppercase mb-3">Total Nodes</div>
+            <div className="text-4xl font-extrabold text-slate-900 tracking-tight">{stats.total_nodes || 0}</div>
           </div>
-          <div className="metric-card">
-            <div className="metric-label">Total Edges</div>
-            <div className="metric-value">{stats.total_edges || 0}</div>
+          
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <div className="text-xs font-bold text-slate-500 tracking-wider uppercase mb-3">Total Edges</div>
+            <div className="text-4xl font-extrabold text-slate-900 tracking-tight">{stats.total_edges || 0}</div>
           </div>
-          <div className="metric-card border-l-4 border-red-500">
-            <div className="metric-label">Active (24h)</div>
-            <div className="metric-value text-red-600">{stats.active_edges_24h || 0}</div>
+          
+          <div className="rounded-2xl border border-slate-200 border-l-4 border-l-rose-500 bg-white p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <div className="text-xs font-bold text-slate-500 tracking-wider uppercase mb-3">Active (24h)</div>
+            <div className="text-4xl font-extrabold text-rose-600 tracking-tight">{stats.active_edges_24h || 0}</div>
           </div>
-          <div className="metric-card">
-            <div className="metric-label">Window</div>
-            <div className="metric-value">24h</div>
+          
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <div className="text-xs font-bold text-slate-500 tracking-wider uppercase mb-3">Window</div>
+            <div className="text-4xl font-extrabold text-slate-900 tracking-tight">24h</div>
           </div>
         </div>
       )}
 
       {/* Node Types */}
       {stats?.node_breakdown && (
-        <div className="card">
-          <h3 className="section-header">Node Types</h3>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-lg font-bold text-slate-900 mb-5">Node Types</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
             {Object.entries(stats.node_breakdown).map(([type, count]) => (
-              <div key={type} className="grid-item">
-                <div className="grid-item-value">{count}</div>
-                <div className="grid-item-label capitalize">{type}</div>
+              <div key={type} className="rounded-xl border border-slate-100 bg-slate-50 p-4 flex flex-col items-center justify-center shadow-sm hover:bg-slate-100 transition-colors">
+                <div className="text-2xl font-bold text-slate-800">{count}</div>
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-1 text-center">{type}</div>
               </div>
             ))}
           </div>
@@ -90,13 +112,13 @@ export default function Layer1Dashboard() {
 
       {/* Edge Types */}
       {stats?.edge_breakdown && (
-        <div className="card">
-          <h3 className="section-header">Edge Types</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="text-lg font-bold text-slate-900 mb-5">Edge Types</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {Object.entries(stats.edge_breakdown).map(([type, count]) => (
-              <div key={type} className="grid-item">
-                <div className="grid-item-value text-blue-600">{count}</div>
-                <div className="grid-item-colored">{type}</div>
+              <div key={type} className="rounded-xl border border-slate-100 bg-slate-50 p-4 flex flex-col items-center justify-center shadow-sm hover:bg-slate-100 transition-colors">
+                <div className="text-2xl font-bold text-indigo-600">{count}</div>
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mt-1 text-center">{type}</div>
               </div>
             ))}
           </div>
@@ -107,26 +129,39 @@ export default function Layer1Dashboard() {
       <ProvGraph />
 
       {/* Info Section */}
-      <div className="card border-l-4 border-green-500 bg-green-50">
-        <h3 className="section-header text-green-900">About Layer 1</h3>
-        <ul className="space-y-2 text-sm text-gray-700">
-          <li className="flex items-start gap-2">
-            <span className="text-green-600 font-bold">✓</span>
-            <span><strong>Event Collection:</strong> ETW, Threat Intel, AMSI, Registry, WMI</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-green-600 font-bold">✓</span>
-            <span><strong>Node Types:</strong> Process, File, Script, WMI Object, Registry Key</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-green-600 font-bold">✓</span>
-            <span><strong>Edge Types:</strong> SPAWNED, READ, WROTE, INJECTED_INTO, and more</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-green-600 font-bold">✓</span>
-            <span><strong>Active Window:</strong> 24 hours in-memory, 30 days queryable archive</span>
-          </li>
-        </ul>
+      <div className="flex items-start gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
+        <div className="flex-shrink-0 rounded-full bg-white p-2 shadow-sm border border-emerald-100 mt-1">
+          <span className="text-xl leading-none block">💡</span>
+        </div>
+        <div className="w-full">
+          <h3 className="text-emerald-900 font-extrabold text-lg mb-3 tracking-tight">About Layer 1</h3>
+          <ul className="space-y-3 text-sm text-emerald-800 font-medium">
+            <li className="flex items-start gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span><strong className="text-emerald-900">Event Collection:</strong> ETW, Threat Intel, AMSI, Registry, WMI</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span><strong className="text-emerald-900">Node Types:</strong> Process, File, Script, WMI Object, Registry Key</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span><strong className="text-emerald-900">Edge Types:</strong> SPAWNED, READ, WROTE, INJECTED_INTO, and more</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span><strong className="text-emerald-900">Active Window:</strong> 24 hours in-memory, 30 days queryable archive</span>
+            </li>
+          </ul>
+        </div>
       </div>
     </div>
   );

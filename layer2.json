@@ -1,0 +1,24 @@
+﻿
+
+StatusCode        : 200
+StatusDescription : OK
+Content           : {"total":10,"items":[{"event":{"event_id":"sysmon1-959f4edbf58a4e43","ts":1776501189.8766346,"source":"sysmon","k
+                    ind":"PROCESS_CREATE","session_id":"sysmon:20260418-0833:spawn:14540","parent_process":...
+RawContent        : HTTP/1.1 200 OK
+                    Content-Length: 11523
+                    Content-Type: application/json
+                    Date: Sat, 18 Apr 2026 08:33:32 GMT
+                    Server: uvicorn
+                    
+                    {"total":10,"items":[{"event":{"event_id":"sysmon1-959f4edbf58a4e43","ts...
+Forms             : {}
+Headers           : {[Content-Length, 11523], [Content-Type, application/json], [Date, Sat, 18 Apr 2026 08:33:32 GMT], [Server, 
+                    uvicorn]}
+Images            : {}
+InputFields       : {}
+Links             : {}
+ParsedHtml        : mshtml.HTMLDocumentClass
+RawContentLength  : 11523
+
+
+

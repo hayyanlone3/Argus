@@ -16,6 +16,7 @@ from layers.layer4_response.isolation import IsolationService
 from database import connection
 from database.schemas import QuarantineCreate
 from layers.layer4_response.quarantine import QuarantineService
+from layers.layer0_bouncer.services import BouncerService
 
 logger = setup_logger(__name__)
 
@@ -54,6 +55,18 @@ def squash01(raw: float) -> float:
         return clamp01(1.0 / (1.0 + math.exp(-raw)))
     except Exception:
         return 0.0
+
+
+# ---- Helpers ----
+def is_suspicious_extension(path: Optional[str]) -> bool:
+    p = (path or "").lower()
+    return p.endswith((
+        ".exe", ".dll", ".sys", ".scr", ".com",
+        ".ps1", ".psm1",
+        ".vbs", ".js", ".jse", ".wsf", ".hta",
+        ".bat", ".cmd", ".lnk",
+        ".docm", ".xlsm", ".pptm",
+    ))
 
 
 # ---- Hashing ----
@@ -396,10 +409,80 @@ class Layer2RuntimeEngine:
                 a = fa.result(timeout=1.0)
                 b = fb.result(timeout=1.0)
 
+                # Layer 0 Flagging Logic (cheap, synchronous check)
+                layer0_flagged = False
+                if evt.kind == "FILE_CREATE" and evt.target_path:
+                    # Trigger Layer0 if suspicious extension
+                    suspicious_ext = is_suspicious_extension(evt.target_path)
+
+                    if suspicious_ext:
+                        layer0_flagged = True
+                    else:
+                        # Otherwise trigger only if Layer A flagged entropy/burst
+                        for r in (a.get("reasons") or []):
+                            if (
+                                r.startswith("high_entropy=")
+                                or r.startswith("mid_entropy=")
+                                or r.startswith("write_burst_")
+                                or r.startswith("write_spike_")
+                            ):
+                                layer0_flagged = True
+                                break
+                
+                layer0_result = None
+                if layer0_flagged and evt.target_path:
+                    db0 = None
+                    try:
+                        if connection.SessionLocal is not None:
+                            db0 = connection.SessionLocal()
+                        
+                        try:
+                            file_size = os.path.getsize(evt.target_path)
+                        except Exception:
+                            file_size = 0
+                            
+                        file_hash = sha256_file(evt.target_path)
+                        
+                        decision = BouncerService.bouncer_decision(
+                            evt.target_path,
+                            file_size,
+                            vt_score=0.0,
+                            db=db0,
+                        )
+                        
+                        layer0_result = {
+                            "flagged": True,
+                            "decision": decision,
+                            "file_size": file_size,
+                            "hash_sha256": file_hash,
+                            "vt_used": False,
+                        }
+                    except Exception as ex:
+                        layer0_result = {"flagged": True, "error": str(ex)}
+                    finally:
+                        if db0:
+                            db0.close()
+
                 # C uses A/B
                 c = score_layer_c(evt, a_score=a["score"], b_score=b["score"])
 
                 fused = fuse(a["score"], b["score"], c["score"])
+                
+                # Apply Layer 0 overrides to fusion score/decision
+                if layer0_result:
+                    fused["layer0"] = layer0_result
+                    
+                    l0_status = layer0_result.get("decision", {}).get("status")
+                    if l0_status in ("CRITICAL", "BLOCK"):
+                        fused["decision"] = "MALWARE ALERT"
+                        fused["final_score"] = 1.0
+                        fused["rule"] = str(fused.get("rule", "")) + " + layer0_block_override"
+                    elif l0_status == "WARN":
+                        # Only upgrade to SUSPICIOUS if it wasn't already flagged higher
+                        if fused.get("decision") == "NORMAL":
+                            fused["decision"] = "SUSPICIOUS"
+                        fused["final_score"] = max(float(fused.get("final_score", 0.0)), 0.50)
+                        fused["rule"] = str(fused.get("rule", "")) + " + layer0_warn_override"
 
                 # Auto-response logic
                 ml_ready = (not RIVER_AVAILABLE) or (_ML_MODEL is None) or (_ML_SEEN >= warmup)
@@ -438,13 +521,27 @@ class Layer2RuntimeEngine:
                         err = "child_pid_missing"
 
                 quarantine_result = {"quarantined": False, "reason": "not_attempted"}
-                # If containment triggers and event contains a file path, quarantine it immediately.
-                # Most relevant for FILE_CREATE events (evt.target_path).
+                
+                # If containment triggers (Layer2 fast path/ML) AND event contains a file path, quarantine it.
                 if auto_kill and should_kill and evt.target_path:
                     quarantine_result = try_quarantine_path(
                         original_path=evt.target_path,
                         detection_layer="Layer2_Containment",
                         confidence=1.0 if fused.get("decision") == "MALWARE ALERT" else 0.8,
+                        session_id=evt.session_id,
+                        mitre_stage=None,
+                    )
+                # Or if Layer 0 Bouncer explicitly flags it
+                elif (
+                    layer0_result 
+                    and layer0_result.get("decision", {}).get("status") in ("WARN", "CRITICAL", "BLOCK") 
+                    and evt.target_path 
+                    and is_suspicious_extension(evt.target_path)
+                ):
+                     quarantine_result = try_quarantine_path(
+                        original_path=evt.target_path,
+                        detection_layer="Layer0_Bouncer",
+                        confidence=0.85 if layer0_result.get("decision", {}).get("status") == "WARN" else 0.95,
                         session_id=evt.session_id,
                         mitre_stage=None,
                     )
@@ -481,6 +578,8 @@ class Layer2RuntimeEngine:
 
             except Exception:
                 logger.exception("❌ Layer2RuntimeEngine event processing failed")
+
+
 
                 
 # parallel, non-blocking and safe because it doesn’t writes DB. 

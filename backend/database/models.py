@@ -1,7 +1,7 @@
 # backend/database/models.py
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, Text, ForeignKey,
-    Enum, Index, JSON
+    Enum, Index, JSON, Boolean
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -55,12 +55,12 @@ class Edge(Base):
     ml_anomaly_score = Column(Float, nullable=True)
     final_severity = Column(Enum(Severity), nullable=True)
 
-    # Edge metadata (RENAMED from 'metadata' to avoid SQLAlchemy conflict)
+    # Edge metadata
     injection_type = Column(String(100), nullable=True)
     script_risk = Column(Float, nullable=True)
     reg_key_risk = Column(Float, nullable=True)
     wmi_type = Column(String(100), nullable=True)
-    edge_metadata = Column(JSON, nullable=True)  # ← CHANGED: was 'metadata'
+    edge_metadata = Column(JSON, nullable=True) 
 
     # Relationships
     source = relationship("Node", foreign_keys=[source_id], back_populates="edges_from")
@@ -152,6 +152,18 @@ class Feedback(Base):
     timestamp = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
+class PolicyConfig(Base):
+    """Global auto-response policy configuration."""
+    __tablename__ = "policy_config"
+
+    id = Column(Integer, primary_key=True, default=1)
+    auto_response_enabled = Column(Boolean, default=False, nullable=False)
+    kill_on_alert = Column(Boolean, default=False, nullable=False)
+    quarantine_on_warn = Column(Boolean, default=False, nullable=False)
+    min_final_score_incident = Column(Float, default=0.50, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
 # ═══════════════════════════════════════════════════════════════
 # AUDIT LOGS (stored in PostgreSQL)
 # ═══════════════════════════════════════════════════════════════
@@ -186,3 +198,4 @@ class AuditLog(Base):
     __table_args__ = (
         Index("idx_audit_source_action_ts", "source", "action", "timestamp"),
     )
+
