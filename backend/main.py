@@ -21,6 +21,7 @@ from layers.layer1_graph_engine.routes import router as layer1_router
 from layers.layer2_scoring.routes import router as layer2_router
 from layers.layer3_correlator.routes import router as layer3_router
 from layers.layer4_response.routes import router as layer4_router
+from layers.layer4_response.policy_routes import router as policy_router
 from layers.layer5_learning.routes import router as layer5_router
 
 # Layer 2 Engine
@@ -211,6 +212,9 @@ app.include_router(layer4_router, prefix="/api/layer4", tags=["Layer 4: Response
 
 # Layer 5: Learning
 app.include_router(layer5_router, prefix="/api/layer5", tags=["Layer 5: Learning"])
+
+# Policy Configuration
+app.include_router(policy_router)
 
 # ═══════════════════════════════════════════════════════════════
 # ERROR HANDLERS

@@ -1,7 +1,7 @@
 # backend/database/models.py
 from sqlalchemy import (
     Column, Integer, String, Float, DateTime, Text, ForeignKey,
-    Enum, Index, JSON, Boolean
+    Enum, Index, JSON, Boolean, func
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
@@ -157,11 +157,11 @@ class PolicyConfig(Base):
     __tablename__ = "policy_config"
 
     id = Column(Integer, primary_key=True, default=1)
-    auto_response_enabled = Column(Boolean, default=False, nullable=False)
-    kill_on_alert = Column(Boolean, default=False, nullable=False)
-    quarantine_on_warn = Column(Boolean, default=False, nullable=False)
-    min_final_score_incident = Column(Float, default=0.50, nullable=False)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    auto_response_enabled = Column(Boolean, default=False)
+    kill_on_alert = Column(Boolean, default=False)
+    quarantine_on_warn = Column(Boolean, default=True)
+    min_final_score_incident = Column(Float, default=0.5)
+    updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -198,4 +198,3 @@ class AuditLog(Base):
     __table_args__ = (
         Index("idx_audit_source_action_ts", "source", "action", "timestamp"),
     )
-

@@ -17,6 +17,7 @@ from database import connection
 from database.schemas import QuarantineCreate
 from layers.layer4_response.quarantine import QuarantineService
 from layers.layer0_bouncer.services import BouncerService
+from database.models import PolicyConfig
 
 logger = setup_logger(__name__)
 
@@ -43,6 +44,32 @@ if RIVER_AVAILABLE:
 # In-memory latest results (safe start; DB persistence can come later)
 LATEST_DECISIONS: Dict[str, Dict[str, Any]] = {}  # event_id -> payload
 LATEST_LOCK = threading.Lock()
+
+
+# ---- Policy Cache ----
+_POLICY_CACHE = None
+_POLICY_LAST_REFRESH = 0
+
+def refresh_policy_cache():
+    global _POLICY_CACHE, _POLICY_LAST_REFRESH
+    if connection.SessionLocal is None:
+        return
+    try:
+        db = connection.SessionLocal()
+        policy = db.query(PolicyConfig).filter_by(id=1).first()
+        if policy:
+            _POLICY_CACHE = {
+                "auto_response_enabled": policy.auto_response_enabled,
+                "kill_on_alert": policy.kill_on_alert,
+                "quarantine_on_warn": policy.quarantine_on_warn,
+                "min_final_score_incident": policy.min_final_score_incident,
+            }
+            _POLICY_LAST_REFRESH = time.time()
+    except Exception as e:
+        logger.error(f"Failed to refresh policy cache: {e}")
+    finally:
+        if 'db' in locals() and db:
+            db.close()
 
 
 def clamp01(x: float) -> float:
@@ -386,16 +413,27 @@ class Layer2RuntimeEngine:
         logger.info("🛑 Layer2RuntimeEngine stopped")
 
     def _run(self):
-        global _ML_SEEN
+        global _ML_SEEN, _POLICY_LAST_REFRESH, _POLICY_CACHE
 
         warmup = int(os.getenv("ARGUS_ML_WARMUP_EVENTS", "500"))
-        auto_kill = os.getenv("ARGUS_AUTO_KILL_ON_ALERT", "false").lower() == "true"
 
         # fast path thresholds (immediate containment without waiting for ML warmup)
         fast_a = float(os.getenv("ARGUS_FAST_A_ALERT", "0.85"))
         fast_b = float(os.getenv("ARGUS_FAST_B_ALERT", "0.90"))
 
         while not self._stop.is_set():
+            
+            # Refresh policy every 5s
+            if (time.time() - _POLICY_LAST_REFRESH) > 5 or _POLICY_CACHE is None:
+                refresh_policy_cache()
+            
+            policy = _POLICY_CACHE or {
+                "auto_response_enabled": False,
+                "kill_on_alert": False,
+                "quarantine_on_warn": True,
+                "min_final_score_incident": 0.5
+            }
+
             try:
                 evt: TelemetryEvent = EVENT_QUEUE.get(timeout=0.5)
             except Exception:
@@ -510,7 +548,12 @@ class Layer2RuntimeEngine:
 
                 killed = False
                 err = None
-                if auto_kill and should_kill:
+                
+                is_auto_response = policy.get("auto_response_enabled", False)
+                is_kill_enabled = is_auto_response and policy.get("kill_on_alert", False)
+                is_quarantine_enabled = is_auto_response and policy.get("quarantine_on_warn", False)
+                
+                if is_kill_enabled and should_kill:
                     pid = evt.child_pid
                     if pid:
                         try:
@@ -522,34 +565,35 @@ class Layer2RuntimeEngine:
 
                 quarantine_result = {"quarantined": False, "reason": "not_attempted"}
                 
-                # If containment triggers (Layer2 fast path/ML) AND event contains a file path, quarantine it.
-                if auto_kill and should_kill and evt.target_path:
-                    quarantine_result = try_quarantine_path(
-                        original_path=evt.target_path,
-                        detection_layer="Layer2_Containment",
-                        confidence=1.0 if fused.get("decision") == "MALWARE ALERT" else 0.8,
-                        session_id=evt.session_id,
-                        mitre_stage=None,
-                    )
-                # Or if Layer 0 Bouncer explicitly flags it
-                elif (
-                    layer0_result 
-                    and layer0_result.get("decision", {}).get("status") in ("WARN", "CRITICAL", "BLOCK") 
-                    and evt.target_path 
-                    and is_suspicious_extension(evt.target_path)
-                ):
-                     quarantine_result = try_quarantine_path(
-                        original_path=evt.target_path,
-                        detection_layer="Layer0_Bouncer",
-                        confidence=0.85 if layer0_result.get("decision", {}).get("status") == "WARN" else 0.95,
-                        session_id=evt.session_id,
-                        mitre_stage=None,
-                    )
+                if is_quarantine_enabled:
+                    # If containment triggers (Layer2 fast path/ML) AND event contains a file path, quarantine it.
+                    if should_kill and evt.target_path:
+                        quarantine_result = try_quarantine_path(
+                            original_path=evt.target_path,
+                            detection_layer="Layer2_Containment",
+                            confidence=1.0 if fused.get("decision") == "MALWARE ALERT" else 0.8,
+                            session_id=evt.session_id,
+                            mitre_stage=None,
+                        )
+                    # Or if Layer 0 Bouncer explicitly flags it
+                    elif (
+                        layer0_result 
+                        and layer0_result.get("decision", {}).get("status") in ("WARN", "CRITICAL", "BLOCK") 
+                        and evt.target_path 
+                        and is_suspicious_extension(evt.target_path)
+                    ):
+                         quarantine_result = try_quarantine_path(
+                            original_path=evt.target_path,
+                            detection_layer="Layer0_Bouncer",
+                            confidence=0.85 if layer0_result.get("decision", {}).get("status") == "WARN" else 0.95,
+                            session_id=evt.session_id,
+                            mitre_stage=None,
+                        )
 
                 fused["auto_response"] = {
-                    "enabled": auto_kill,
+                    "enabled": is_auto_response,
                     "action": "kill_child",
-                    "should_kill": bool(auto_kill and should_kill),
+                    "should_kill": bool(is_kill_enabled and should_kill),
                     "killed": bool(killed),
                     "error": err,
                     "quarantine": quarantine_result,

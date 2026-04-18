@@ -76,7 +76,7 @@ class EdgeResponse(BaseModel):
 
 # ═══════════════════════════════════════════════════════════════
 # INCIDENT SCHEMAS
-# ══════════��════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════
 
 class IncidentCreate(BaseModel):
     """Schema for creating a new incident."""
@@ -178,7 +178,7 @@ class WhitelistResponse(BaseModel):
         from_attributes = True
 
 
-# ═══════════════════════════════════════════════════════════��═══
+# ═══════════════════════════════════════════════════════════════
 # FEEDBACK SCHEMAS
 # ═══════════════════════════════════════════════════════════════
 
@@ -218,6 +218,28 @@ class VTCacheResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# ═══════════════════════════════════════════════════════════════
+# POLICY SCHEMAS
+# ═══════════════════════════════════════════════════════════════
+
+class PolicyConfigOut(BaseModel):
+    """Schema for returning policy config data."""
+    auto_response_enabled: bool
+    kill_on_alert: bool
+    quarantine_on_warn: bool
+    min_final_score_incident: float
+    
+    class Config:
+        from_attributes = True
+
+class PolicyConfigUpdate(BaseModel):
+    """Schema for updating policy config data."""
+    auto_response_enabled: Optional[bool] = None
+    kill_on_alert: Optional[bool] = None
+    quarantine_on_warn: Optional[bool] = None
+    min_final_score_incident: Optional[float] = None
 
 
 # ═══════════════════════════════════════════════════════════════

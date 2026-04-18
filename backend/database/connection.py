@@ -43,8 +43,22 @@ def init_db():
         
         # Create all tables
         logger.info("📊 Creating database tables...")
-        from database.models import Base
+        from database.models import Base, PolicyConfig
         Base.metadata.create_all(bind=engine)
+        
+        # Insert default policy row if missing
+        session = SessionLocal()
+        try:
+            if not session.query(PolicyConfig).filter_by(id=1).first():
+                policy = PolicyConfig()
+                session.add(policy)
+                session.commit()
+                logger.info("✅ Default PolicyConfig initialized")
+        except Exception as e:
+            logger.error(f"❌ Error seeding default policy: {e}")
+            session.rollback()
+        finally:
+            session.close()
         
         logger.info("✅ All tables created successfully")
         
