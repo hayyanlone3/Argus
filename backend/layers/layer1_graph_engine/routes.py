@@ -7,14 +7,14 @@ Provides node and edge management endpoints
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from database.connection import get_db
-from database.models import Node, Edge
-from database.schemas import (
+from backend.database.connection import get_db
+from backend.database.models import Node, Edge
+from backend.database.schemas import (
     NodeCreate, EdgeCreate, NodeResponse, EdgeResponse
 )
 from .services import GraphService
-from layers.layer1_graph_engine.event_bus import event_bus
-from shared.logger import setup_logger
+from backend.layers.layer1_graph_engine.event_bus import event_bus
+from backend.shared.logger import setup_logger
 import json
 import asyncio
 

@@ -2,8 +2,8 @@
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import NullPool
-from config import settings
-from shared.logger import setup_logger
+from backend.config import settings
+from backend.shared.logger import setup_logger
 
 logger = setup_logger(__name__)
 

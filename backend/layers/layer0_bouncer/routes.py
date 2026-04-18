@@ -5,10 +5,10 @@ Provides fast-path file analysis endpoints
 
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from sqlalchemy.orm import Session
-from database.connection import get_db
-from database.schemas import VTCacheResponse
-from database.models import VTCache
-from shared.logger import setup_logger
+from backend.database.connection import get_db
+from backend.database.schemas import VTCacheResponse
+from backend.database.models import VTCache
+from backend.shared.logger import setup_logger
 from .services import BouncerService
 import os
 from pathlib import Path

@@ -7,10 +7,10 @@ Runs retraining on schedule (weekly)
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from datetime import datetime
-from database.connection import SessionLocal
+from backend.database.connection import SessionLocal
 from .retrainer import RetrainingService
-from shared.logger import setup_logger
-from config import settings
+from backend.shared.logger import setup_logger
+from backend.config import settings
 
 logger = setup_logger(__name__)
 

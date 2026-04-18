@@ -4,10 +4,10 @@ from typing import Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from database.models import Edge, Node
-from shared.enums import EdgeType, NodeType, Severity
-from shared.logger import setup_logger
-from shared.audit import AuditLogger
+from backend.database.models import Edge, Node
+from backend.shared.enums import EdgeType, NodeType, Severity
+from backend.shared.logger import setup_logger
+from backend.shared.audit import AuditLogger
 
 logger = setup_logger(__name__)
 

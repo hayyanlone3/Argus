@@ -4,8 +4,8 @@ Layer 2.5: Decision Voting Logic
 Combines 3 scoring channels into final severity decision
 """
 
-from shared.enums import Severity
-from shared.constants import (
+from backend.shared.enums import Severity
+from backend.shared.constants import (
     DECISION_CRITICAL_MATH_ML,
     DECISION_CRITICAL_STAT_ML,
     DECISION_WARNING_MATH,
@@ -14,7 +14,7 @@ from shared.constants import (
     DECISION_UNKNOWN_ML_MIN,
     DECISION_UNKNOWN_ML_MAX,
 )
-from shared.logger import setup_logger
+from backend.shared.logger import setup_logger
 
 logger = setup_logger(__name__)
 

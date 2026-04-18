@@ -6,11 +6,11 @@ Model statistics and retraining control
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from database.connection import get_db
-from database.models import Feedback, Incident
+from backend.database.connection import get_db
+from backend.database.models import Feedback, Incident
 from .retrainer import RetrainingService
 from .scheduler import LearningScheduler
-from shared.logger import setup_logger
+from backend.shared.logger import setup_logger
 from datetime import datetime, timedelta
 
 logger = setup_logger(__name__)

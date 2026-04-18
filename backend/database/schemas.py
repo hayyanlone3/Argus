@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import Optional, List
-from shared.enums import NodeType, EdgeType, Severity, Status
+from backend.shared.enums import NodeType, EdgeType, Severity, Status
 
 
 # ═══════════════════════════════════════════════════════════════

@@ -6,12 +6,12 @@ Groups edges into incidents using 2-of-3 signal correlation
 
 from sqlalchemy.orm import Session
 from typing import Optional
-from database.models import Edge, Node, Incident
-from database.schemas import IncidentCreate
-from shared.enums import Severity, EdgeType
+from backend.database.models import Edge, Node, Incident
+from backend.database.schemas import IncidentCreate
+from backend.shared.enums import Severity, EdgeType
 from sqlalchemy import func
-from shared.logger import setup_logger
-from shared.constants import (
+from backend.shared.logger import setup_logger
+from backend.shared.constants import (
     CORRELATION_MAX_HOPS,
     CORRELATION_REQUIRE_SIGNALS,
     SIGNAL_PROXIMITY_WEIGHT,

@@ -6,8 +6,8 @@ Kill malicious processes
 
 import subprocess
 import os
-from shared.logger import setup_logger
-from shared.exceptions import ValidationError
+from backend.shared.logger import setup_logger
+from backend.shared.exceptions import ValidationError
 
 logger = setup_logger(__name__)
 

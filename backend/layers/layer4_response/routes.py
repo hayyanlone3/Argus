@@ -6,9 +6,9 @@ Quarantine, whitelist, and feedback management
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from database.connection import get_db
-from database.models import Quarantine, Whitelist, Incident
-from database.schemas import (
+from backend.database.connection import get_db
+from backend.database.models import Quarantine, Whitelist, Incident
+from backend.database.schemas import (
     QuarantineCreate, QuarantineRestore, QuarantineResponse,
     WhitelistCreate, WhitelistResponse, FeedbackCreate
 )
@@ -16,8 +16,8 @@ from .quarantine import QuarantineService
 from .whitelist import WhitelistService
 from .isolation import IsolationService
 from .feedback import FeedbackService
-from shared.logger import setup_logger
-from shared.exceptions import ValidationError
+from backend.shared.logger import setup_logger
+from backend.shared.exceptions import ValidationError
 
 logger = setup_logger(__name__)
 

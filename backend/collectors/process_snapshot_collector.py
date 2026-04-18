@@ -6,13 +6,13 @@ from typing import Dict, Optional, Tuple
 
 import psutil
 
-from shared.logger import setup_logger
-from shared.enums import NodeType, EdgeType
-from shared.audit import AuditLogger
+from backend.shared.logger import setup_logger
+from backend.shared.enums import NodeType, EdgeType
+from backend.shared.audit import AuditLogger
 
-from database import connection
-from database.schemas import NodeCreate, EdgeCreate
-from layers.layer1_graph_engine.services import GraphService
+from backend.database import connection
+from backend.database.schemas import NodeCreate, EdgeCreate
+from backend.layers.layer1_graph_engine.services import GraphService
 
 logger = setup_logger(__name__)
 

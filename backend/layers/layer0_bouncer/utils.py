@@ -12,8 +12,8 @@ from scipy.stats import entropy
 from pathlib import Path
 import hashlib
 import subprocess
-from shared.logger import setup_logger
-from shared.constants import KNOWN_PACKERS
+from backend.shared.logger import setup_logger
+from backend.shared.constants import KNOWN_PACKERS
 
 logger = setup_logger(__name__)
 

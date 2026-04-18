@@ -6,9 +6,9 @@ Collects analyst feedback for model improvement
 
 from datetime import datetime
 from sqlalchemy.orm import Session
-from database.models import Feedback
-from database.schemas import FeedbackCreate
-from shared.logger import setup_logger
+from backend.database.models import Feedback
+from backend.database.schemas import FeedbackCreate
+from backend.shared.logger import setup_logger
 
 logger = setup_logger(__name__)
 

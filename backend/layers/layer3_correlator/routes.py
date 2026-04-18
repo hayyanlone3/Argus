@@ -6,14 +6,14 @@ Provides incident management endpoints
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from database.connection import get_db
-from database.models import Incident, Edge, Feedback
-from database.schemas import (
+from backend.database.connection import get_db
+from backend.database.models import Incident, Edge, Feedback
+from backend.database.schemas import (
     IncidentResponse, IncidentUpdate, FeedbackCreate, FeedbackResponse
 )
 from .services import CorrelatorService
 from .narrative import NarrativeGenerator
-from shared.logger import setup_logger
+from backend.shared.logger import setup_logger
 from datetime import datetime
 
 logger = setup_logger(__name__)

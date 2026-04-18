@@ -8,7 +8,10 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
 
-from shared.enums import NodeType, EdgeType, Severity
+import backend.shared.enums
+NodeType = backend.shared.enums.NodeType
+EdgeType = backend.shared.enums.EdgeType
+Severity = backend.shared.enums.Severity
 
 Base = declarative_base()
 

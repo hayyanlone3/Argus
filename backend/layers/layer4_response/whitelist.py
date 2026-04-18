@@ -5,11 +5,11 @@ Layer 4: Whitelist Service
 """
 
 from sqlalchemy.orm import Session
-from database.models import Whitelist
-from database.schemas import WhitelistCreate
-from shared.constants import NEVER_TIER1_WHITELIST
-from shared.logger import setup_logger
-from shared.exceptions import ValidationError
+from backend.database.models import Whitelist
+from backend.database.schemas import WhitelistCreate
+from backend.shared.constants import NEVER_TIER1_WHITELIST
+from backend.shared.logger import setup_logger
+from backend.shared.exceptions import ValidationError
 from datetime import datetime
 
 logger = setup_logger(__name__)

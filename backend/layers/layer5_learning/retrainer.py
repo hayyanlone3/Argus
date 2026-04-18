@@ -6,9 +6,9 @@ Weekly model retraining on verified feedback
 
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from database.models import Feedback, Incident, Edge, Node
-from shared.logger import setup_logger
-from config import settings
+from backend.database.models import Feedback, Incident, Edge, Node
+from backend.shared.logger import setup_logger
+from backend.config import settings
 import json
 
 logger = setup_logger(__name__)

@@ -1,7 +1,7 @@
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 
-from database.models import AuditLog
+from backend.database.models import AuditLog
 
 
 class AuditLogger:

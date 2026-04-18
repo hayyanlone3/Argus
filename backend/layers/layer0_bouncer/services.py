@@ -11,10 +11,10 @@ import hashlib
 import aiohttp
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
-from database.models import VTCache
-from config import settings
-from shared.logger import setup_logger
-from shared.constants import (
+from backend.database.models import VTCache
+from backend.config import settings
+from backend.shared.logger import setup_logger
+from backend.shared.constants import (
     VT_POSITIVE_THRESHOLD,
     ENTROPY_THRESHOLD_HIGH,
     ENTROPY_THRESHOLD_MEDIUM,

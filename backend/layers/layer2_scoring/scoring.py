@@ -4,10 +4,10 @@ Calculates anomaly scores from 3 independent channels
 """
 
 from sqlalchemy.orm import Session
-from database.models import Edge, Node
-from shared.enums import Severity
-from shared.logger import setup_logger
-from shared.constants import (
+from backend.database.models import Edge, Node
+from backend.shared.enums import Severity
+from backend.shared.logger import setup_logger
+from backend.shared.constants import (
     SPAWN_RATE_SIGMA,
     RENAME_BURST_THRESHOLD,
     EDGE_BURST_SIGMA,
@@ -15,7 +15,7 @@ from shared.constants import (
     ML_THRESHOLD_MEDIUM,
     ML_THRESHOLD_LOW,
 )
-from config import settings
+from backend.config import settings
 import numpy as np
 from scipy import stats
 

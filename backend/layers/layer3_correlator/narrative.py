@@ -4,9 +4,9 @@ Layer 3: Narrative Generation
 Creates plain-English descriptions of attack chains
 """
 
-from database.models import Edge, Node
-from shared.enums import Severity, EdgeType
-from shared.logger import setup_logger
+from backend.database.models import Edge, Node
+from backend.shared.enums import Severity, EdgeType
+from backend.shared.logger import setup_logger
 
 logger = setup_logger(__name__)
 

@@ -9,15 +9,15 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, Optional
 
-from shared.logger import setup_logger
-from layers.layer2_scoring.event_stream import EVENT_QUEUE, TelemetryEvent, to_dict
-from layers.layer4_response.isolation import IsolationService
+from backend.shared.logger import setup_logger
+from backend.layers.layer2_scoring.event_stream import EVENT_QUEUE, TelemetryEvent, to_dict
+from backend.layers.layer4_response.isolation import IsolationService
 
-from database import connection
-from database.schemas import QuarantineCreate
-from layers.layer4_response.quarantine import QuarantineService
-from layers.layer0_bouncer.services import BouncerService
-from database.models import PolicyConfig
+from backend.database import connection
+from backend.database.schemas import QuarantineCreate
+from backend.layers.layer4_response.quarantine import QuarantineService
+from backend.layers.layer0_bouncer.services import BouncerService
+from backend.database.models import PolicyConfig
 
 logger = setup_logger(__name__)
 

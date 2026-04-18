@@ -12,25 +12,25 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from shared.logger import setup_logger
-from database.connection import init_db
+from backend.shared.logger import setup_logger
+from backend.database.connection import init_db
 
 # Import all layer routers
-from layers.layer0_bouncer.routes import router as layer0_router
-from layers.layer1_graph_engine.routes import router as layer1_router
-from layers.layer2_scoring.routes import router as layer2_router
-from layers.layer3_correlator.routes import router as layer3_router
-from layers.layer4_response.routes import router as layer4_router
-from layers.layer4_response.policy_routes import router as policy_router
-from layers.layer5_learning.routes import router as layer5_router
+from backend.layers.layer0_bouncer.routes import router as layer0_router
+from backend.layers.layer1_graph_engine.routes import router as layer1_router
+from backend.layers.layer2_scoring.routes import router as layer2_router
+from backend.layers.layer3_correlator.routes import router as layer3_router
+from backend.layers.layer4_response.routes import router as layer4_router
+from backend.layers.layer4_response.policy_routes import router as policy_router
+from backend.layers.layer5_learning.routes import router as layer5_router
 
 # Layer 2 Engine
-from layers.layer2_scoring.runtime_engine import Layer2RuntimeEngine
+from backend.layers.layer2_scoring.runtime_engine import Layer2RuntimeEngine
 
 # Collectors
-from collectors.file_watcher_collector import FileWatcherCollector
-from collectors.process_snapshot_collector import ProcessSnapshotCollector
-from collectors.sysmon_collector import SysmonCollector
+from backend.collectors.file_watcher_collector import FileWatcherCollector
+from backend.collectors.process_snapshot_collector import ProcessSnapshotCollector
+from backend.collectors.sysmon_collector import SysmonCollector
 
 logger = setup_logger(__name__)
 

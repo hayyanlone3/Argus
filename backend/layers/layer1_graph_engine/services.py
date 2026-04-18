@@ -6,18 +6,18 @@ Core graph operations: create nodes, edges, query relationships
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from database.models import Node, Edge, Incident
-from database.schemas import NodeCreate, EdgeCreate
-from shared.enums import NodeType, EdgeType, Severity
-from shared.logger import setup_logger
-from config import settings
+from backend.database.models import Node, Edge, Incident
+from backend.database.schemas import NodeCreate, EdgeCreate
+from backend.shared.enums import NodeType, EdgeType, Severity
+from backend.shared.logger import setup_logger
+from backend.config import settings
 import networkx as nx
 import uuid
 import os
 
-from layers.layer2_scoring.auto_scoring import AutoScoringService
-from layers.layer1_graph_engine.event_bus import event_bus
-from layers.layer3_correlator.services import CorrelatorService
+from backend.layers.layer2_scoring.auto_scoring import AutoScoringService
+from backend.layers.layer1_graph_engine.event_bus import event_bus
+from backend.layers.layer3_correlator.services import CorrelatorService
 
 logger = setup_logger(__name__)
 

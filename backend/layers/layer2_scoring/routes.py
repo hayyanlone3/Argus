@@ -6,13 +6,13 @@ Provides scoring and decision endpoints
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from database.connection import get_db
-from database.models import Edge, Node
-from shared.logger import setup_logger
+from backend.database.connection import get_db
+from backend.database.models import Edge, Node
+from backend.shared.logger import setup_logger
 from .scoring import ScoringEngine
 from .voting_logic import VotingEngine
 
-from layers.layer2_scoring.runtime_engine import LATEST_DECISIONS, LATEST_LOCK
+from backend.layers.layer2_scoring.runtime_engine import LATEST_DECISIONS, LATEST_LOCK
 
 logger = setup_logger(__name__)
 

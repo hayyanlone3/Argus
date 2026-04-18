@@ -9,11 +9,11 @@ import shutil
 from pathlib import Path
 from datetime import datetime
 from sqlalchemy.orm import Session
-from database.models import Quarantine
-from database.schemas import QuarantineCreate, QuarantineRestore
-from config import settings
-from shared.logger import setup_logger
-from shared.exceptions import ValidationError, DatabaseError
+from backend.database.models import Quarantine
+from backend.database.schemas import QuarantineCreate, QuarantineRestore
+from backend.config import settings
+from backend.shared.logger import setup_logger
+from backend.shared.exceptions import ValidationError, DatabaseError
 
 logger = setup_logger(__name__)
 
