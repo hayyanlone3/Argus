@@ -27,9 +27,7 @@ from backend.layers.layer5_learning.routes import router as layer5_router
 # Layer 2 Engine
 from backend.layers.layer2_scoring.runtime_engine import Layer2RuntimeEngine
 
-# Collectors
-from backend.collectors.file_watcher_collector import FileWatcherCollector
-from backend.collectors.process_snapshot_collector import ProcessSnapshotCollector
+
 from backend.collectors.sysmon_collector import SysmonCollector
 
 logger = setup_logger(__name__)
@@ -57,41 +55,6 @@ async def lifespan(app: FastAPI):
         app.state.layer2_engine = Layer2RuntimeEngine()
         app.state.layer2_engine.start()
 
-        # ──────────────────────────────────────────────────────────
-        # File watcher collector (DEV only; disable for Sysmon-only)
-        # ──────────────────────────────────────────────────────────
-        watch_paths = [
-            r"C:\Users\admin\Downloads",
-            r"C:\Users\admin\Desktop",
-            r"C:\Users\admin\Documents",
-        ]
-
-        fw_enabled = os.getenv("ARGUS_FILE_WATCHER_ENABLED", "false").lower() == "true"
-        app.state.file_watcher = FileWatcherCollector(
-            paths=watch_paths,
-            enabled=fw_enabled,
-            hash_max_mb=int(os.getenv("ARGUS_FILE_HASH_MAX_MB", "10")),
-            ignore_prefixes=[r"C:\Windows", r"C:\Program Files", r"C:\Program Files (x86)"],
-            audit_enabled=os.getenv("ARGUS_AUDIT_ENABLED", "true").lower() == "true",
-        )
-        if fw_enabled:
-            app.state.file_watcher.start()
-        else:
-            logger.info("⏭️ FileWatcherCollector disabled (ARGUS_FILE_WATCHER_ENABLED=false)")
-
-        # ──────────────────────────────────────────────────────────
-        # Process snapshot collector (DEV only; disable for Sysmon-only)
-        # ──────────────────────────────────────────────────────────
-        ps_enabled = os.getenv("ARGUS_PROC_SNAPSHOT_ENABLED", "false").lower() == "true"
-        app.state.proc_snapshot = ProcessSnapshotCollector(
-            enabled=ps_enabled,
-            interval_seconds=int(os.getenv("ARGUS_PROC_SNAPSHOT_INTERVAL_SEC", "5")),
-            audit_enabled=os.getenv("ARGUS_AUDIT_ENABLED", "true").lower() == "true",
-        )
-        if ps_enabled:
-            app.state.proc_snapshot.start()
-        else:
-            logger.info("⏭️ ProcessSnapshotCollector disabled (ARGUS_PROC_SNAPSHOT_ENABLED=false)")
 
         # ──────────────────────────────────────────────────────────
         # Sysmon Collector
@@ -134,21 +97,6 @@ async def lifespan(app: FastAPI):
             e.stop()
     except Exception as ex:
         logger.error(f"❌ Failed to stop layer2 engine cleanly: {ex}")
-
-    try:
-        ps = getattr(app.state, "proc_snapshot", None)
-        if ps:
-            ps.stop()
-    except Exception as e:
-        logger.error(f"❌ Failed to stop process snapshot cleanly: {e}")
-
-    try:
-        fw = getattr(app.state, "file_watcher", None)
-        if fw:
-            fw.stop()
-    except Exception as e:
-        logger.error(f"❌ Failed to stop file watcher cleanly: {e}")
-        
     try:
         sm = getattr(app.state, "sysmon", None)
         if sm:

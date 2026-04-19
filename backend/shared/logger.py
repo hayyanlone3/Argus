@@ -34,6 +34,8 @@ def setup_logger(name: str) -> logging.Logger:
 
     # Avoid adding duplicate handlers on reload
     if not any(isinstance(h, logging.StreamHandler) for h in root.handlers):
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8')  # Fix Windows emoji crashes
         handler = logging.StreamHandler(sys.stdout)
         handler.setLevel(level)
         handler.setFormatter(JsonFormatter())
