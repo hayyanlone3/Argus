@@ -1,6 +1,6 @@
 import threading
 import queue
-from shared.logger import setup_logger
+from backend.shared.logger import setup_logger
 
 logger = setup_logger(__name__)
 

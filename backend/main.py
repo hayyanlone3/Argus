@@ -66,7 +66,7 @@ async def lifespan(app: FastAPI):
             r"C:\Users\admin\Documents",
         ]
 
-        fw_enabled = os.getenv("ARGUS_FILE_WATCHER_ENABLED", "true").lower() == "true"
+        fw_enabled = os.getenv("ARGUS_FILE_WATCHER_ENABLED", "false").lower() == "true"
         app.state.file_watcher = FileWatcherCollector(
             paths=watch_paths,
             enabled=fw_enabled,
@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI):
         # ──────────────────────────────────────────────────────────
         # Process snapshot collector (DEV only; disable for Sysmon-only)
         # ──────────────────────────────────────────────────────────
-        ps_enabled = os.getenv("ARGUS_PROC_SNAPSHOT_ENABLED", "true").lower() == "true"
+        ps_enabled = os.getenv("ARGUS_PROC_SNAPSHOT_ENABLED", "false").lower() == "true"
         app.state.proc_snapshot = ProcessSnapshotCollector(
             enabled=ps_enabled,
             interval_seconds=int(os.getenv("ARGUS_PROC_SNAPSHOT_INTERVAL_SEC", "5")),
@@ -106,6 +106,15 @@ async def lifespan(app: FastAPI):
             app.state.sysmon.start()
         else:
             logger.info("⏭️ SysmonCollector disabled by ARGUS_SYSMON_ENABLED=false")
+
+        # ──────────────────────────────────────────────────────────
+        # Layer 5: Learning Scheduler (weekly retraining)
+        # ──────────────────────────────────────────────────────────
+        try:
+            from backend.layers.layer5_learning.scheduler import LearningScheduler
+            LearningScheduler.init_scheduler()
+        except Exception as sched_err:
+            logger.warning(f"⚠️ Learning scheduler init failed (non-fatal): {sched_err}")
 
         logger.info("✅ Database initialized successfully")
         logger.info("✅ API running on 0.0.0.0:8000")

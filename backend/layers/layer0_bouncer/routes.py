@@ -142,9 +142,15 @@ async def analyze_file(
         logger.info(f"📊 Analyzing file: {file_path}")
         logger.info(f"   Size: {file_size / 1024 / 1024:.2f} MB")
         
-        # VT lookup
-        vt_result = await BouncerService.vt_hash_lookup("", db)  # Will use file hash
-        vt_score = vt_result.get("score", 0.0)
+        # Calculate file hash first
+        from .utils import calculate_file_hash
+        file_hash = calculate_file_hash(file_path)
+        
+        # VT lookup with actual hash
+        vt_score = 0.0
+        if file_hash and len(file_hash) == 64:
+            vt_result = await BouncerService.vt_hash_lookup(file_hash, db)
+            vt_score = vt_result.get("score", 0.0)
         
         # Bouncer decision
         decision = BouncerService.bouncer_decision(file_path, file_size, vt_score, db)

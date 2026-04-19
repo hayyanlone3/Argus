@@ -20,11 +20,14 @@ def init_db():
         logger.info(f"   Database Type: {settings.database_type}")
         logger.info(f"   Database URL: {settings.database_url[:50]}...")
         
-        # Create engine
+        # Create engine with robust connection pooling for high-throughput collectors
         engine = create_engine(
             settings.database_url,
             echo=settings.sqlalchemy_echo,
-            poolclass=NullPool,  # Single-threaded for ETW collection
+            pool_size=20,          # Keep 20 connections open
+            max_overflow=50,       # Allow up to 50 bursts
+            pool_timeout=30,
+            pool_recycle=1800,     # Recycle connections every 30m
         )
         
         # Test connection
@@ -43,7 +46,7 @@ def init_db():
         
         # Create all tables
         logger.info("📊 Creating database tables...")
-        from database.models import Base, PolicyConfig
+        from backend.database.models import Base, PolicyConfig
         Base.metadata.create_all(bind=engine)
         
         # Insert default policy row if missing

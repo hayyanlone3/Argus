@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # DATABASE SETTINGS
     # ═══════════════════════════════════════════════════════════════════════════════
     database_type: Literal["sqlite", "postgresql"] = "postgresql"
-    database_url: str = "postgresql://argus:password123@localhost:5432/argus_db"
+    database_url: str = "postgresql://argus:8888@localhost:5432/argus_db"
     sqlalchemy_echo: bool = False
     
     # ═══════════════════════════════════════════════════════════════════════════════

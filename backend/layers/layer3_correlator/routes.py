@@ -103,7 +103,7 @@ async def get_incident(
             node_ids.add(edge.source_id)
             node_ids.add(edge.target_id)
         
-        from database.models import Node
+        from backend.database.models import Node
         nodes = db.query(Node).filter(Node.id.in_(list(node_ids))).all() if node_ids else []
         
         return {

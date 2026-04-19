@@ -49,11 +49,40 @@ def calculate_shannon_entropy(file_path: str) -> float:
         return float(shannon)
     
     except FileNotFoundError:
-        logger.error(f"❌ File not found: {file_path}")
+        logger.debug(f"ℹ️ File vanished before reading (common for temp files): {file_path}")
         return 0.0
     except Exception as e:
         logger.error(f"❌ Failed to calculate entropy: {e}")
         return 0.0
+
+
+def calculate_file_hash(file_path: str) -> str:
+    """
+    Calculate SHA-256 hash of a file.
+    
+    Args:
+        file_path: Path to file
+        
+    Returns:
+        SHA-256 hex digest string, or empty string on error
+    """
+    try:
+        sha256 = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            while True:
+                chunk = f.read(65536)
+                if not chunk:
+                    break
+                sha256.update(chunk)
+        file_hash = sha256.hexdigest()
+        logger.debug(f"🔑 Hash of {Path(file_path).name}: {file_hash[:16]}...")
+        return file_hash
+    except FileNotFoundError:
+        logger.debug(f"ℹ️ File vanished before hashing (common for temp files): {file_path}")
+        return ""
+    except Exception as e:
+        logger.error(f"❌ Failed to calculate hash: {e}")
+        return ""
 
 
 def calculate_sample_entropy(file_path: str, sample_size_mb: int = 1) -> float:
@@ -214,28 +243,4 @@ def get_file_code_section_entropy(file_path: str) -> float:
     
     except Exception as e:
         logger.debug(f"⚠️  Could not extract code section: {e}")
-        return 0.0
-
-
-def calculate_file_hash(file_path: str, algorithm: str = 'sha256') -> str:
-    """
-    Calculate file hash (MD5, SHA1, SHA256, etc.).
-    
-    Args:
-        file_path: Path to file
-        algorithm: Hash algorithm (default SHA256)
-        
-    Returns:
-        Hex digest of file hash
-    """
-    try:
-        hash_obj = hashlib.new(algorithm)
-        with open(file_path, 'rb') as f:
-            for chunk in iter(lambda: f.read(4096), b''):
-                hash_obj.update(chunk)
-        
-        return hash_obj.hexdigest()
-    
-    except Exception as e:
-        logger.error(f"❌ Failed to hash file: {e}")
-        return ""
+        return 0.0

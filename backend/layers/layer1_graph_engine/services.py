@@ -223,16 +223,13 @@ class GraphService:
             for edge in edges:
                 G.add_edge(edge.source_id, edge.target_id, edge_type=edge.edge_type)
             
-            # Get neighbors within N hops
+            # Get neighbors within N hops using BFS on undirected view
             neighbors = set()
-            try:
-                if node_id in G:
-                    ancestors = nx.ancestors(G, node_id)
-                    descendants = nx.descendants(G, node_id)
-                    neighbors.update(ancestors)
-                    neighbors.update(descendants)
-            except:
-                pass
+            if node_id in G:
+                # Use undirected graph for proximity (both directions count)
+                G_undirected = G.to_undirected()
+                reachable = nx.single_source_shortest_path_length(G_undirected, node_id, cutoff=hops)
+                neighbors = set(reachable.keys()) - {node_id}
             
             logger.debug(f"🗺️  Node {node_id} has {len(neighbors)} neighbors within {hops} hops")
             

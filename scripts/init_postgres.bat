@@ -115,7 +115,7 @@ echo   Database: argus_db
 echo   Location: D:\PostgreSQL\XX (your drive)
 echo.
 echo Update your .env file with:
-echo   DATABASE_URL=postgresql://argus:password123@localhost:5432/argus_db
+echo   DATABASE_URL=postgresql://argus:8888@localhost:5432/argus_db
 echo.
 echo Next step:
 echo   python scripts/init_db.py

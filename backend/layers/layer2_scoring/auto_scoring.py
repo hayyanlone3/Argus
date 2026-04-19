@@ -20,11 +20,11 @@ SUSPICIOUS_EXTENSIONS = {
 
 # Path fragments that often represent high-risk write locations
 RISKY_PATH_FRAGMENTS = [
-    r"\appdata\local\temp\\",
-    r"\appdata\roaming\\",
-    r"\programdata\\",
-    r"\users\public\\",
-    r"\microsoft\windows\start menu\programs\startup\\",
+    r"\appdata\local\temp",
+    r"\appdata\roaming",
+    r"\programdata",
+    r"\users\public",
+    r"\microsoft\windows\start menu\programs\startup",
 ]
 
 

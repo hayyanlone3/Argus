@@ -2,6 +2,7 @@
 
 import time
 import threading
+import asyncio
 from datetime import datetime
 from typing import Optional, Dict, Any
 
@@ -16,6 +17,7 @@ from backend.database import connection
 from backend.database.schemas import NodeCreate, EdgeCreate
 from backend.layers.layer1_graph_engine.services import GraphService
 from backend.layers.layer2_scoring.event_stream import TelemetryEvent, publish_event, new_event_id
+from backend.layers.layer0_bouncer.services import BouncerService
 
 logger = setup_logger(__name__)
 
@@ -23,8 +25,16 @@ SYS_CHANNEL = "Microsoft-Windows-Sysmon/Operational"
 PROVIDER_NAME = "Microsoft-Windows-Sysmon"
 
 EV_PROCESS_CREATE = 1
+EV_CREATE_REMOTE_THREAD = 8
+EV_PROCESS_ACCESS = 10
 EV_FILE_CREATE = 11
 EV_REG_VALUE_SET = 13
+
+SUSPICIOUS_EXTENSIONS = (
+    ".exe", ".dll", ".sys", ".scr", ".com",
+    ".ps1", ".psm1", ".vbs", ".js", ".jse", ".wsf", ".hta", ".bat",
+    ".cmd", ".lnk", ".docm", ".xlsm", ".pptm", ".txt"
+)
 
 
 def _session_id(prefix: str, key: str) -> str:
@@ -167,6 +177,10 @@ class SysmonCollector:
     def _handle(self, event_id: int, data: Dict[str, Any]):
         if event_id == EV_PROCESS_CREATE:
             self._handle_process_create(data)
+        elif event_id == EV_CREATE_REMOTE_THREAD:
+            self._handle_create_remote_thread(data)
+        elif event_id == EV_PROCESS_ACCESS:
+            self._handle_process_access(data)
         elif event_id == EV_FILE_CREATE:
             self._handle_file_create(data)
         elif event_id == EV_REG_VALUE_SET:
@@ -311,6 +325,41 @@ class SysmonCollector:
                     payload={"process_image": image, "pid": pid, "guid": guid},
                 )
 
+            # === AUTO-TRIGGER .exe/.dll/... Bouncer Analysis HERE ===
+            if target.lower().endswith(SUSPICIOUS_EXTENSIONS):
+                logger.info(f"🚦 [Layer0 AutoScan] Analyzing suspicious file: {target}")
+                try:
+                    import os as _os
+                    file_size = _os.path.getsize(target) if _os.path.exists(target) else 0
+                    result = BouncerService.bouncer_decision(target, file_size, vt_score=0.0, db=db)
+                    decision_status = result.get('status', 'UNKNOWN')
+                    logger.info(f"🔍 [Layer0 Result] {target} → {decision_status}")
+
+                    if decision_status in ["BLOCK", "CRITICAL"]:
+                        logger.warning(f"🚨 [Layer0 Action] Auto-quarantining {target} due to {decision_status} verdict.")
+                        from backend.layers.layer4_response.quarantine import QuarantineService
+                        from backend.database.schemas import QuarantineCreate
+                        try:
+                            # Attempt to quarantine the file immediately
+                            # Providing a dummy hash if None, though calculation should exist
+                            f_hash = result.get('file_hash') or "unknown_hash"
+                            QuarantineService.quarantine_file(
+                                file_path=target,
+                                db=db,
+                                quarantine_data=QuarantineCreate(
+                                    original_path=target,
+                                    hash_sha256=f_hash,
+                                    detection_layer="Layer 0",
+                                    confidence=0.99 if decision_status == "BLOCK" else 0.85
+                                )
+                            )
+                            logger.info(f"✅ [Layer0 Action] Success quarantining {target}")
+                        except Exception as q_err:
+                            logger.error(f"❌ [Layer0 Action] Failed to quarantine {target}: {q_err}")
+
+                except Exception as e:
+                    logger.error(f"❌ Layer0 auto-scan failed for {target}: {e}")
+
         except Exception:
             logger.exception("❌ Sysmon FileCreate handling failed")
         finally:
@@ -383,5 +432,140 @@ class SysmonCollector:
 
         except Exception:
             logger.exception("❌ Sysmon RegistrySet handling failed")
+        finally:
+            db.close()
+
+    def _handle_create_remote_thread(self, data: Dict[str, Any]):
+        """Sysmon Event ID 8: CreateRemoteThread — strong injection signal."""
+        db = connection.SessionLocal()
+        try:
+            source_image = data.get("SourceImage") or ""
+            target_image = data.get("TargetImage") or ""
+            source_pid = data.get("SourceProcessId") or ""
+            target_pid = data.get("TargetProcessId") or ""
+            source_guid = data.get("SourceProcessGuid") or ""
+            target_guid = data.get("TargetProcessGuid") or ""
+            new_thread_id = data.get("NewThreadId") or ""
+            start_address = data.get("StartAddress") or ""
+            start_function = data.get("StartFunction") or ""
+
+            sid = _session_id("sysmon", f"inject:{source_pid}:{target_pid}")
+
+            source_node = GraphService.create_or_update_node(
+                db,
+                NodeCreate(type=NodeType.PROCESS, name=(source_image.split("\\")[-1] or "source"), path=source_image, hash_sha256=None, path_risk=0.0),
+            )
+            target_node = GraphService.create_or_update_node(
+                db,
+                NodeCreate(type=NodeType.PROCESS, name=(target_image.split("\\")[-1] or "target"), path=target_image, hash_sha256=None, path_risk=0.0),
+            )
+
+            GraphService.create_edge(
+                db,
+                EdgeCreate(
+                    source_id=source_node.id,
+                    target_id=target_node.id,
+                    edge_type=EdgeType.INJECTED_INTO,
+                    session_id=sid,
+                    injection_type="CreateRemoteThread",
+                    edge_metadata={
+                        "collector": "sysmon",
+                        "event_id": 8,
+                        "source_pid": source_pid,
+                        "target_pid": target_pid,
+                        "source_guid": source_guid,
+                        "target_guid": target_guid,
+                        "new_thread_id": new_thread_id,
+                        "start_address": start_address,
+                        "start_function": start_function,
+                    },
+                ),
+            )
+
+            logger.warning(f"🚨 [INJECTION] CreateRemoteThread: {source_image} → {target_image}")
+
+            if self.audit_enabled:
+                AuditLogger.log(
+                    db,
+                    source="collector.sysmon",
+                    action="create_remote_thread",
+                    level="WARNING",
+                    message=f"CreateRemoteThread: {source_image} → {target_image}",
+                    entity_type="process",
+                    entity_id=target_node.id,
+                    session_id=sid,
+                    path=target_image,
+                    payload={"source_pid": source_pid, "target_pid": target_pid, "start_address": start_address},
+                )
+
+        except Exception:
+            logger.exception("❌ Sysmon CreateRemoteThread handling failed")
+        finally:
+            db.close()
+
+    def _handle_process_access(self, data: Dict[str, Any]):
+        """Sysmon Event ID 10: ProcessAccess — potential injection via OpenProcess."""
+        db = connection.SessionLocal()
+        try:
+            source_image = data.get("SourceImage") or ""
+            target_image = data.get("TargetImage") or ""
+            source_pid = data.get("SourceProcessId") or ""
+            target_pid = data.get("TargetProcessId") or ""
+            granted_access = data.get("GrantedAccess") or ""
+            call_trace = data.get("CallTrace") or ""
+
+            # Only flag high-risk access masks (PROCESS_ALL_ACCESS, VM_WRITE+VM_OPERATION, etc.)
+            risky_masks = {"0x1fffff", "0x1f0fff", "0x143a", "0x1410"}
+            if granted_access.lower() not in risky_masks:
+                return
+
+            sid = _session_id("sysmon", f"access:{source_pid}:{target_pid}")
+
+            source_node = GraphService.create_or_update_node(
+                db,
+                NodeCreate(type=NodeType.PROCESS, name=(source_image.split("\\")[-1] or "source"), path=source_image, hash_sha256=None, path_risk=0.0),
+            )
+            target_node = GraphService.create_or_update_node(
+                db,
+                NodeCreate(type=NodeType.PROCESS, name=(target_image.split("\\")[-1] or "target"), path=target_image, hash_sha256=None, path_risk=0.0),
+            )
+
+            GraphService.create_edge(
+                db,
+                EdgeCreate(
+                    source_id=source_node.id,
+                    target_id=target_node.id,
+                    edge_type=EdgeType.INJECTED_INTO,
+                    session_id=sid,
+                    injection_type="ProcessAccess",
+                    edge_metadata={
+                        "collector": "sysmon",
+                        "event_id": 10,
+                        "source_pid": source_pid,
+                        "target_pid": target_pid,
+                        "granted_access": granted_access,
+                        "call_trace": call_trace[:500],
+                    },
+                ),
+            )
+
+            logger.warning(f"🚨 [INJECTION] ProcessAccess({granted_access}): {source_image} → {target_image}")
+
+            if self.audit_enabled:
+                AuditLogger.log(
+                    db,
+                    source="collector.sysmon",
+                    action="process_access",
+                    level="WARNING",
+                    message=f"ProcessAccess({granted_access}): {source_image} → {target_image}",
+                    entity_type="process",
+                    entity_id=target_node.id,
+                    session_id=sid,
+                    path=target_image,
+                    payload={"source_pid": source_pid, "target_pid": target_pid, "granted_access": granted_access},
+                )
+
+        except Exception:
+            logger.exception("❌ Sysmon ProcessAccess handling failed")
         finally:
             db.close()

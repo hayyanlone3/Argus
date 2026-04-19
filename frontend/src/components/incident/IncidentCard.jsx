@@ -13,9 +13,20 @@ export default function IncidentCard({ incident }) {
       <div className={`card cursor-pointer transform hover:scale-105 transition-transform ${getSeverityBgClass(incident.severity)}`}>
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
-            <h3 className="font-bold text-lg text-gray-900 mb-1">
-              Incident {formatHash(incident.session_id, 8)}
-            </h3>
+            <div className="flex items-center">
+              <h3 className="font-bold text-lg text-gray-900 mb-1">
+                Incident {formatHash(incident.session_id, 8)}
+              </h3>
+              {/* --- AutoScan badge here --- */}
+              {incident.source === 'sysmon_autoscan' && (
+                <span
+                  className="ml-2 px-2 py-0.5 bg-red-500 text-white text-xs rounded-full font-bold uppercase tracking-wide"
+                  title="Automatically scanned by Layer 0 (Sysmon)"
+                >
+                  AutoScan
+                </span>
+              )}
+            </div>
             <p className="text-sm text-gray-600">{incident.mitre_stage || 'Unknown Stage'}</p>
           </div>
           <SeverityBadge severity={incident.severity} />

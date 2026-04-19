@@ -81,7 +81,12 @@ export default function IncidentFeed({ severity = null, limit = 20 }) {
       ) : (
         <div className="grid gap-4">
           {incidents.map((incident) => (
-            <IncidentCard key={incident.session_id} incident={incident} />
+            <IncidentCard
+              key={incident.session_id}
+              incident={incident}
+              // --- Add this: pass explicit source if needed ---
+              source={incident.source}
+            />
           ))}
         </div>
       )}
