@@ -70,7 +70,14 @@ export default function Layer4Dashboard() {
 
   useEffect(() => {
     axios.get('/api/layer4/policy')
-      .then(res => setPolicy(res.data))
+      .then(res => {
+        if (res.data && typeof res.data === 'object') {
+          setPolicy(res.data);
+        }
+      })
+      .catch(err => {
+        console.error("❌ Policy Fetch Failed. Using local defaults.", err);
+      })
       .finally(() => setPolicyLoading(false));
   }, []);
   

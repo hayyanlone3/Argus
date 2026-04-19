@@ -44,9 +44,21 @@ export default function Layer2Dashboard() {
       setItems(data);
       setError(null);
 
-      if (!selected && data.length > 0) {
-        setSelected(data[0]);
-      }
+      // Use the callback form to avoid the stale closure bug
+      setSelected((prevSelected) => {
+        // If nothing is selected yet, select the first item
+        if (!prevSelected && data.length > 0) {
+          return data[0];
+        }
+        // If an item is already selected, keep it selected!
+        // We also find the latest version of it in the new data so the right panel stays live.
+        if (prevSelected) {
+          const freshVersion = data.find(it => it.event?.event_id === prevSelected.event?.event_id);
+          return freshVersion || prevSelected;
+        }
+        return prevSelected;
+      });
+      
     } catch (e) {
       setError(e?.message || 'Failed to load live scoring data');
     } finally {

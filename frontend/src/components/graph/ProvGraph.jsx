@@ -212,24 +212,30 @@ export default function ProvGraph() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <div className="lg:col-span-2 bg-gray-50 rounded-lg p-2 border" style={{ minHeight: 560 }}>
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        <div className="lg:col-span-3 bg-[#0f172a] rounded-2xl p-0 border border-slate-800 shadow-2xl relative overflow-hidden" style={{ minHeight: 600 }}>
           <D3ProvenanceGraph
             nodes={filteredViewNodes}
             edges={filteredViewEdges}
-            height={560}
+            height={600}
             onNodeClick={onNodeClick}
             selectedNodeId={selectedNodeId}
           />
         </div>
 
-        <div className="bg-white rounded-lg border p-3 min-h-[560px]">
-          <div className="font-semibold mb-2">Node Detail</div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm min-h-[600px]">
+          <div className="flex items-center gap-2 mb-4 pb-2 border-b border-slate-100">
+            <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+            <div className="font-black text-xs uppercase tracking-widest text-slate-400">Node Explorer</div>
+          </div>
           {selectedNodeId ? (
             <NodeDetail nodeId={selectedNodeId} />
           ) : (
-            <div className="text-sm text-gray-500">
-              Click a node in the graph to see details and auto-focus its neighborhood.
+            <div className="flex flex-col items-center justify-center h-full text-center space-y-4 px-4">
+              <div className="text-4xl filter grayscale opacity-20">🖱️</div>
+              <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                Select a node in the graph to inspect provenance details
+              </div>
             </div>
           )}
         </div>

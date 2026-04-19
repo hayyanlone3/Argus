@@ -38,11 +38,10 @@ SUSPICIOUS_EXTENSIONS = (
 
 
 def _session_id(prefix: str, key: str) -> str:
-    # keep within String(100) constraint
-    minute = datetime.utcnow().strftime("%Y%m%d-%H%M")
+    # Use a stable key per process/session
+    minute = datetime.utcnow().strftime("%Y%m%d-%H")
     s = f"{prefix}:{minute}:{key}"
     return s[:95]
-
 
 def _evt_xml(evt) -> Optional[str]:
     try:
@@ -197,7 +196,7 @@ class SysmonCollector:
             child_guid = data.get("ProcessGuid") or ""
             parent_guid = data.get("ParentProcessGuid") or ""
 
-            sid = _session_id("sysmon", f"spawn:{child_pid}")
+            sid = _session_id("sysmon", f"pid:{child_pid}")
 
             # publish to Layer2 stream (non-blocking)
             publish_event(TelemetryEvent(
@@ -271,7 +270,7 @@ class SysmonCollector:
             guid = data.get("ProcessGuid") or ""
             target = data.get("TargetFilename") or ""
 
-            sid = _session_id("sysmon", f"write:{pid}")
+            sid = _session_id("sysmon", f"pid:{pid}")
 
             # publish to Layer2 stream (non-blocking)
             publish_event(TelemetryEvent(
@@ -327,35 +326,59 @@ class SysmonCollector:
 
             # === AUTO-TRIGGER .exe/.dll/... Bouncer Analysis HERE ===
             if target.lower().endswith(SUSPICIOUS_EXTENSIONS):
-                logger.info(f"🚦 [Layer0 AutoScan] Analyzing suspicious file: {target}")
+                logger.info(f"[Layer0 AutoScan] Analyzing suspicious file: {target}")
                 try:
                     import os as _os
+                    # 1. Get Bouncer Decision
                     file_size = _os.path.getsize(target) if _os.path.exists(target) else 0
                     result = BouncerService.bouncer_decision(target, file_size, vt_score=0.0, db=db)
                     decision_status = result.get('status', 'UNKNOWN')
-                    logger.info(f"🔍 [Layer0 Result] {target} → {decision_status}")
+                    
+                    # 2. Fetch Active Policy (Singleton)
+                    from backend.database.models import PolicyConfig
+                    policy = db.query(PolicyConfig).first()
+                    auto_on = policy.auto_response_enabled if policy else False
+                    quar_on = policy.quarantine_on_warn if policy else False
+                    
+                    # Log analysis to audit trail
+                    AuditLogger.log(
+                        db,
+                        source="layer0.auto_scan",
+                        action="analysis_complete",
+                        level="WARNING" if decision_status != "PASS" else "INFO",
+                        message=f"Auto-analysis: {target} -> {decision_status} (Policy: {'ENABLED' if auto_on else 'DISABLED'})",
+                        path=target,
+                        hash_sha256=result.get('file_hash'),
+                        payload=result
+                    )
 
-                    if decision_status in ["BLOCK", "CRITICAL"]:
-                        logger.warning(f"🚨 [Layer0 Action] Auto-quarantining {target} due to {decision_status} verdict.")
-                        from backend.layers.layer4_response.quarantine import QuarantineService
-                        from backend.database.schemas import QuarantineCreate
-                        try:
-                            # Attempt to quarantine the file immediately
-                            # Providing a dummy hash if None, though calculation should exist
-                            f_hash = result.get('file_hash') or "unknown_hash"
-                            QuarantineService.quarantine_file(
-                                file_path=target,
-                                db=db,
-                                quarantine_data=QuarantineCreate(
-                                    original_path=target,
-                                    hash_sha256=f_hash,
-                                    detection_layer="Layer 0",
-                                    confidence=0.99 if decision_status == "BLOCK" else 0.85
+                    # 3. Take Automated Action ONLY if Master Switch is ENABLED
+                    if auto_on and decision_status in ["BLOCK", "CRITICAL", "WARN"]:
+                        # Permission/Strategy Check: Only quarantine WARN if the specific toggle is on
+                        if decision_status == "WARN" and not quar_on:
+                            logger.info(f"[Policy] Skipping quarantine for WARN as 'quarantine_on_warn' is disabled.")
+                        else:
+                            logger.warning(f"[Layer4 Response] MASTER SWITCH ACTIVE. Quarantining {target}...")
+                            from backend.layers.layer4_response.quarantine import QuarantineService
+                            from backend.database.schemas import QuarantineCreate
+                            
+                            try:
+                                f_hash = result.get('file_hash') or "unknown_hash"
+                                QuarantineService.quarantine_file(
+                                    file_path=target,
+                                    db=db,
+                                    quarantine_data=QuarantineCreate(
+                                        original_path=target,
+                                        hash_sha256=f_hash,
+                                        detection_layer="Layer 0",
+                                        confidence=0.99 if decision_status == "BLOCK" else 0.85
+                                    )
                                 )
-                            )
-                            logger.info(f"✅ [Layer0 Action] Success quarantining {target}")
-                        except Exception as q_err:
-                            logger.error(f"❌ [Layer0 Action] Failed to quarantine {target}: {q_err}")
+                                logger.info(f"✅ [Response Success] {target} isolated.")
+                            except Exception as q_err:
+                                logger.error(f"❌ [Response Failed] Could not isolate {target}: {q_err}")
+                    elif not auto_on and decision_status != "PASS":
+                        logger.info(f"[Policy] Threat detected but Master Switch is OFF. Passive monitoring only.")
 
                 except Exception as e:
                     logger.error(f"❌ Layer0 auto-scan failed for {target}: {e}")
@@ -374,7 +397,7 @@ class SysmonCollector:
             target_obj = data.get("TargetObject") or ""
             details = data.get("Details") or ""
 
-            sid = _session_id("sysmon", f"reg:{pid}")
+            sid = _session_id("sysmon", f"pid:{pid}")
 
             # publish to Layer2 stream (non-blocking)
             publish_event(TelemetryEvent(
@@ -449,7 +472,7 @@ class SysmonCollector:
             start_address = data.get("StartAddress") or ""
             start_function = data.get("StartFunction") or ""
 
-            sid = _session_id("sysmon", f"inject:{source_pid}:{target_pid}")
+            sid = _session_id("sysmon", f"pid:{source_pid}")
 
             source_node = GraphService.create_or_update_node(
                 db,
@@ -519,7 +542,7 @@ class SysmonCollector:
             if granted_access.lower() not in risky_masks:
                 return
 
-            sid = _session_id("sysmon", f"access:{source_pid}:{target_pid}")
+            sid = _session_id("sysmon", f"pid:{source_pid}")
 
             source_node = GraphService.create_or_update_node(
                 db,

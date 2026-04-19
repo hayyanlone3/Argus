@@ -207,6 +207,42 @@ async def get_vt_cache(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+from backend.database.models import VTCache, AuditLog
+
+# ... (keep other imports)
+
+@router.get("/recent-analysis")
+async def get_recent_analysis(
+    db: Session = Depends(get_db),
+    limit: int = 50
+):
+    """
+    Get recent automatic file analysis logs.
+    """
+    try:
+        from backend.database.models import AuditLog
+        logs = db.query(AuditLog).filter(
+            AuditLog.source == "layer0.auto_scan"
+        ).order_by(AuditLog.timestamp.desc()).limit(limit).all()
+        
+        return [
+            {
+                "id": log.id,
+                "timestamp": log.timestamp.isoformat(),
+                "path": log.path,
+                "status": log.payload.get("status") if log.payload else "UNKNOWN",
+                "entropy": log.payload.get("entropy") if log.payload else 0.0,
+                "vt_score": log.payload.get("vt_score") if log.payload else 0.0,
+                "signals": log.payload.get("signals") if log.payload else [],
+                "message": log.message
+            }
+            for log in logs
+        ]
+    except Exception as e:
+        logger.error(f"❌ Failed to fetch recent analysis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.delete("/vt-cache/{hash_sha256}")
 async def delete_vt_cache_entry(
     hash_sha256: str,

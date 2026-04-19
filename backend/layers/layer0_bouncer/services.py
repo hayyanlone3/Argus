@@ -209,7 +209,7 @@ class BouncerService:
             }
         """
         try:
-            logger.info(f"🔍 Bouncer analyzing: {file_path}")
+            logger.info(f"Bouncer analyzing: {file_path}")
             
             signals = []
             
@@ -220,13 +220,13 @@ class BouncerService:
             # Signal 1: VT lookup
             if vt_score > VT_POSITIVE_THRESHOLD:
                 signals.append(f"VirusTotal positive ({vt_score:.1%})")
-                logger.warning(f"🚨 Signal 1: VT positive ({vt_score:.1%})")
+                logger.warning(f"Signal 1: VT positive ({vt_score:.1%})")
             
             # Signal 2: Entropy
             bouncer_status, entropy_val = BouncerService.entropy_check(file_path, file_size)
             if bouncer_status in ["WARN", "CRITICAL"]:
                 signals.append(f"High entropy ({entropy_val:.2f})")
-                logger.warning(f"🚨 Signal 2: High entropy ({entropy_val:.2f})")
+                logger.warning(f"Signal 2: High entropy ({entropy_val:.2f})")
             
             # Final decision
             if vt_score > VT_POSITIVE_THRESHOLD:
@@ -242,7 +242,7 @@ class BouncerService:
                 status = "PASS"
                 message = "No anomalies detected"
             
-            logger.info(f"✅ Bouncer decision: {status} - {message}")
+            logger.info(f"Bouncer decision: {status} - {message}")
             
             return {
                 "status": status,
