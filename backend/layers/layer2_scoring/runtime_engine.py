@@ -238,29 +238,31 @@ def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
     score = 0.0
     reasons = []
 
-    # Only meaningful for file activity initially
-    if evt.kind == "FILE_CREATE" and evt.target_path:
-        # Entropy from disk (real signal)
-        ent = best_effort_file_entropy(evt.target_path, max_bytes=int(os.getenv("ARGUS_ENTROPY_MAX_BYTES", "524288")))
-        if ent is not None:
-            evt.file_entropy = ent  # attach for UI/other layers
-            if ent >= 7.9:
-                score += 0.65
-                reasons.append(f"high_entropy={ent:.2f}")
-            elif ent >= 7.2:
-                score += 0.35
-                reasons.append(f"mid_entropy={ent:.2f}")
-            else:
-                reasons.append(f"entropy={ent:.2f}")
+    # Layer A: Statistical Scoring (File & Registry Bursts)
+    if (evt.kind == "FILE_CREATE" and evt.target_path) or (evt.kind == "REG_SET"):
+        # 1. Entropy (File Only)
+        if evt.kind == "FILE_CREATE" and evt.target_path:
+            ent = best_effort_file_entropy(evt.target_path, max_bytes=int(os.getenv("ARGUS_ENTROPY_MAX_BYTES", "524288")))
+            if ent is not None:
+                evt.file_entropy = ent
+                if ent >= 7.9:
+                    score += 0.85
+                    reasons.append(f"high_entropy={ent:.2f}")
+                elif ent >= 7.2:
+                    score += 0.50
+                    reasons.append(f"mid_entropy={ent:.2f}")
 
-        # Burst: many writes in short window by same process image
-        rate = record_write(evt.child_process or "", evt.ts, window_sec=float(os.getenv("ARGUS_WRITE_WINDOW_SEC", "10")))
-        if rate >= int(os.getenv("ARGUS_WRITE_BURST_HI", "20")):
-            score += 0.35
-            reasons.append(f"write_burst_10s={rate}")
-        elif rate >= int(os.getenv("ARGUS_WRITE_BURST_LO", "10")):
-            score += 0.20
-            reasons.append(f"write_spike_10s={rate}")
+        # 2. Activity Bursts (File or Registry)
+        window = float(os.getenv("ARGUS_BURST_WINDOW", "10.0"))
+        rate = record_write(evt.child_process or "system", evt.ts, window_sec=window)
+        
+        burst_threshold = 10 if evt.kind == "REG_SET" else 20
+        if rate >= burst_threshold:
+            score += 0.95
+            reasons.append(f"behavioral_burst_{evt.kind}={rate}")
+        elif rate >= (burst_threshold / 2):
+            score += 0.60
+            reasons.append(f"behavioral_spike_{evt.kind}={rate}")
 
     return {"score": clamp01(score), "reasons": reasons}
 
@@ -522,33 +524,31 @@ class Layer2RuntimeEngine:
                         fused["final_score"] = max(float(fused.get("final_score", 0.0)), 0.50)
                         fused["rule"] = str(fused.get("rule", "")) + " + layer0_warn_override"
 
+                # --- TACTICAL LOGGING (For Validation) ---
+                if fused.get("final_score", 0) > 0.3:
+                     print(f"\n[!] ARGUS DETECTION: {evt.kind} | Score: {fused.get('final_score')} | Decision: {fused.get('decision')}")
+                     print(f"[!] Reasons: {a['reasons'] + b['reasons'] + c['reasons']}")
+                
                 # Auto-response logic
                 ml_ready = (not RIVER_AVAILABLE) or (_ML_MODEL is None) or (_ML_SEEN >= warmup)
 
-                # Immediate kill conditions (no warmup needed):
-                # - ransomware-ish (A very high)
-                # - rare + suspicious lolbin child (B very high + child in lolbins)
-                fast_path = False
-                fast_reason = None
-                if a["score"] >= fast_a:
-                    fast_path = True
-                    fast_reason = "fast_path_A_high"
-                elif b["score"] >= fast_b and _child_is_lolbin(evt):
-                    fast_path = True
-                    fast_reason = "fast_path_B_rare_lolbin"
-
                 should_kill = False
-                
-                # Fast-path containment triggers immediately (do not wait for ML warmup)
-                if fast_path:
-                    should_kill = True
-                # Otherwise require full MALWARE ALERT + ML readiness (when ML is present)
-                elif fused.get("decision") == "MALWARE ALERT":
-                    should_kill = ml_ready
-
                 killed = False
                 err = None
+                fast_path = False
+                fast_reason = None
                 
+                if a["score"] >= fast_a:
+                    fast_path = True
+                    should_kill = True
+                    fast_reason = "fast_path_A_high"
+                
+                # FORCE KILL for Registry Bursts (Override ML Warmup)
+                if evt.kind == "REG_SET" and a["score"] >= 0.8:
+                    should_kill = True
+                    fast_path = True
+                    fast_reason = "registry_burst_override"
+
                 is_auto_response = policy.get("auto_response_enabled", False)
                 is_kill_enabled = is_auto_response and policy.get("kill_on_alert", False)
                 is_quarantine_enabled = is_auto_response and policy.get("quarantine_on_warn", False)
@@ -556,12 +556,16 @@ class Layer2RuntimeEngine:
                 if is_kill_enabled and should_kill:
                     pid = evt.child_pid
                     if pid:
+                        print(f"🛑 [AUTO-RESPONSE] CRITICAL THREAT DETECTED. KILLING PID {pid}...")
                         try:
                             killed = IsolationService.kill_process(int(pid), force=True)
-                        except Exception as ex:
-                            err = str(ex)
+                            if killed: print(f"✅ [SUCCESS] PID {pid} HAS BEEN TERMINATED.")
+                        except Exception as k_ex:
+                            err = str(k_ex)
+                            print(f"❌ [ERROR] Could not kill PID {pid}: {err}")
                     else:
-                        err = "child_pid_missing"
+                         err = "pid_missing"
+                         print("⚠️ [AUTO-RESPONSE] Kill triggered but PID was missing.")
 
                 quarantine_result = {"quarantined": False, "reason": "not_attempted"}
                 

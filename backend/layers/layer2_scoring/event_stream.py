@@ -41,6 +41,7 @@ def publish_event(evt: TelemetryEvent) -> None:
     If queue is full, event is dropped to avoid blocking ingestion.
     """
     try:
+        print(f"[COLLECTOR] Emitting event: {evt.kind}")
         EVENT_QUEUE.put_nowait(evt)
     except Exception:
         pass

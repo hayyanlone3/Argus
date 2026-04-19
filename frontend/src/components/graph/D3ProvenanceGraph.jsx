@@ -73,7 +73,7 @@ export default function D3ProvenanceGraph({ nodes, edges, height = 500, onNodeCl
 
     // Compact Layout (SOC-Ready)
     const stepX = 180;
-    const stepY = 100;
+    const stepY = 80;
     const nodesByLevel = d3.group(graphData.ns, n => graphData.levels.get(n.id));
     
     graphData.ns.forEach(n => {
@@ -91,6 +91,7 @@ export default function D3ProvenanceGraph({ nodes, edges, height = 500, onNodeCl
       .join("g");
 
     linkGroup.append("path")
+      .attr("id", (d, i) => `linkPath-${i}`) // Assign ID here FIRST
       .attr("d", d => {
         const s = graphData.ns.find(n => n.id === d.source_id);
         const t = graphData.ns.find(n => n.id === d.target_id);
@@ -104,20 +105,16 @@ export default function D3ProvenanceGraph({ nodes, edges, height = 500, onNodeCl
 
     // Link Labels (The "Story")
     linkGroup.append("text")
-      .attr("font-size", 7)
+      .attr("font-size", 8)
       .attr("font-weight", 900)
       .attr("text-anchor", "middle")
-      .attr("dy", -5)
-      .attr("fill", d => (d.anomaly_score > 0.6 ? COLORS.alert : COLORS.subtext))
-      .attr("letter-spacing", "0.1em")
+      .attr("fill", d => (d.anomaly_score > 0.6 ? "#fecaca" : "#94a3b8"))
+      .attr("style", "text-shadow: 0 1px 2px rgba(0,0,0,1); text-rendering: optimizeLegibility;")
       .append("textPath")
       .attr("xlink:href", (d, i) => `#linkPath-${i}`)
       .attr("startOffset", "50%")
-      .text(d => d.edge_type?.toUpperCase() || "RELATION");
-    
-    // Hidden paths for text orientation
-    linkGroup.selectAll("path")
-      .attr("id", (d, i) => `linkPath-${i}`);
+      .attr("dominant-baseline", "middle") // Centered on the line
+      .text(d => d.edge_type?.toUpperCase() || "ACTION");
 
     // Nodes
     const node = g.append("g")
