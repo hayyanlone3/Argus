@@ -7,7 +7,10 @@ from queue import Queue
 from typing import Any, Dict, Optional
 
 # shared queue for telemetry events (sysmon → layer2 workers)
-EVENT_QUEUE: "Queue[TelemetryEvent]" = Queue(maxsize=5000)
+# shared queues for telemetry events
+EVENT_QUEUE: "Queue[TelemetryEvent]" = Queue(maxsize=5000)      # Original (legacy/mixed)
+SCORING_QUEUE: "Queue[TelemetryEvent]" = Queue(maxsize=5000)    # For Layer 2
+GRAPH_QUEUE: "Queue[TelemetryEvent]" = Queue(maxsize=5000)      # For Layer 1
 
 @dataclass
 class TelemetryEvent:
@@ -43,6 +46,8 @@ def publish_event(evt: TelemetryEvent) -> None:
     try:
         print(f"[COLLECTOR] Emitting event: {evt.kind}")
         EVENT_QUEUE.put_nowait(evt)
+        SCORING_QUEUE.put_nowait(evt)
+        GRAPH_QUEUE.put_nowait(evt)
     except Exception:
         pass
 

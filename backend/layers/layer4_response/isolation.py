@@ -34,22 +34,25 @@ class IsolationService:
             logger.warning(f"🛑 Killing process: PID {process_id}")
             
             if os.name == 'nt':  # Windows
-                # taskkill /PID <pid> /F (force)
-                cmd = ['taskkill', '/PID', str(process_id)]
-                if force:
-                    cmd.append('/F')
+                # taskkill /PID <pid> /F (force) /T (tree)
+                cmd = ['taskkill', '/F', '/T', '/PID', str(process_id)]
             else:  # Linux/Unix
-                # kill -9 <pid> (force) or kill <pid>
-                sig = '-9' if force else '-15'
-                cmd = ['kill', sig, str(process_id)]
+                # kill -9 <pid> (force) 
+                cmd = ['kill', '-9', str(process_id)]
             
-            result = subprocess.run(cmd, capture_output=True, timeout=5)
+            # Using shell=True on Windows often helps with path visibility of taskkill
+            result = subprocess.run(cmd, capture_output=True, timeout=5, shell=(os.name == 'nt'))
             
             if result.returncode == 0:
                 logger.info(f"✅ Process killed: PID {process_id}")
                 return True
+            elif result.returncode == 128:
+                # 128 = Process not found (already dead)
+                logger.warning(f"ℹ️  Process already terminated: PID {process_id}")
+                return True
             else:
-                logger.error(f"❌ Failed to kill process: {result.stderr.decode()}")
+                stderr = result.stderr.decode()
+                logger.error(f"❌ Failed to kill process: {stderr}")
                 return False
         
         except subprocess.TimeoutExpired:

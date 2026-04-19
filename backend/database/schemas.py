@@ -69,6 +69,7 @@ class EdgeResponse(BaseModel):
     script_risk: Optional[float]
     reg_key_risk: Optional[float]
     wmi_type: Optional[str]
+    edge_metadata: Optional[dict] = None
 
     class Config:
         from_attributes = True

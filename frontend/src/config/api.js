@@ -10,7 +10,7 @@ import axios from 'axios';
 // ═══════════════════════════════════════════════════════════════
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
 
 const API_TIMEOUT = Number(import.meta.env.VITE_API_TIMEOUT || 30000);
 const DEBUG = (import.meta.env.VITE_DEBUG || 'true') === 'true';

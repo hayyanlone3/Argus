@@ -89,7 +89,7 @@ class Incident(Base):
     mitre_stage = Column(String(255), nullable=True)
     narrative = Column(Text, nullable=True)
 
-    status = Column(String(50), default="OPEN", nullable=False, index=True)
+    status = Column(String(50), default="NEW", nullable=False, index=True)
     analyst_notes = Column(Text, nullable=True)
     mtti_seconds = Column(Integer, nullable=True)
     resolved_at = Column(DateTime, nullable=True)

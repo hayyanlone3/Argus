@@ -53,7 +53,14 @@ def init_db():
         session = SessionLocal()
         try:
             if not session.query(PolicyConfig).filter_by(id=1).first():
-                policy = PolicyConfig()
+                # Default to enabled in local/demo so suspicious activity auto-contains
+                policy = PolicyConfig(
+                    id=1,
+                    auto_response_enabled=True,
+                    kill_on_alert=True,
+                    quarantine_on_warn=True,
+                    min_final_score_incident=0.5,
+                )
                 session.add(policy)
                 session.commit()
                 logger.info("✅ Default PolicyConfig initialized")

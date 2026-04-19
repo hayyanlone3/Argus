@@ -9,6 +9,7 @@ export default function IncidentFeed({ severity = null, limit = 20 }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('NEW'); // Default to unhandled
 
   useEffect(() => {
     let mounted = true;
@@ -18,7 +19,8 @@ export default function IncidentFeed({ severity = null, limit = 20 }) {
         if (initial) setLoading(true);
         else setRefreshing(true);
 
-        const data = await incidentService.getIncidents(severity, null, limit);
+        const filter = statusFilter === 'ALL' ? null : statusFilter;
+        const data = await incidentService.getIncidents(severity, filter, limit);
         if (!mounted) return;
 
         setIncidents(data.incidents || []);
@@ -34,12 +36,12 @@ export default function IncidentFeed({ severity = null, limit = 20 }) {
     };
 
     fetchIncidents(true);
-    const interval = setInterval(() => fetchIncidents(false), 30000); // was 10s
+    const interval = setInterval(() => fetchIncidents(false), 10000);
     return () => {
       mounted = false;
       clearInterval(interval);
     };
-  }, [severity, limit]);
+  }, [severity, limit, statusFilter]);
 
   if (loading) return <LoadingSpinner />;
   
@@ -52,31 +54,34 @@ export default function IncidentFeed({ severity = null, limit = 20 }) {
   }
 
   return (
-    <div className="space-y-3">
-      {/* Syncing indicator */}
-      <div className="flex justify-end">
-        <div className="text-xs font-mono text-slate-500 flex items-center gap-2">
+    <div className="space-y-4">
+      {/* Feed Controls */}
+      <div className="flex justify-between items-center bg-[#0f172a] p-1 rounded-lg border border-slate-800">
+        <div className="flex gap-1">
+          {['NEW', 'ACKNOWLEDGED', 'ALL'].map(s => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`px-4 py-1.5 text-[10px] font-black rounded transition-all ${statusFilter === s ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+        
+        <div className="text-xs font-mono text-slate-500 flex items-center gap-2 pr-2">
           {refreshing ? (
-            <>
-              syncing...
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
-              </span>
-            </>
+            <span className="flex items-center gap-2">syncing <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" /></span>
           ) : (
-            <>
-              live
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </>
+            <span className="flex items-center gap-2">live <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /></span>
           )}
         </div>
       </div>
 
       {/* Feed Content */}
       {!incidents.length ? (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 py-8 text-center text-slate-500 text-sm shadow-sm">
-          No incidents found
+        <div className="rounded-xl border border-slate-800 bg-slate-900/50 py-12 text-center text-slate-500 text-xs italic shadow-sm">
+          No {statusFilter.toLowerCase()} incidents found
         </div>
       ) : (
         <div className="grid gap-4">
@@ -84,12 +89,10 @@ export default function IncidentFeed({ severity = null, limit = 20 }) {
             <IncidentCard
               key={incident.session_id}
               incident={incident}
-              // --- Add this: pass explicit source if needed ---
-              source={incident.source}
             />
           ))}
         </div>
       )}
     </div>
   );
-}
+}

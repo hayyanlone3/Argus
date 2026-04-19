@@ -133,4 +133,16 @@ export const incidentService = {
     const stats = await incidentService.getStats();
     return stats.metrics?.false_positive_rate_percent || 0;
   },
+
+  // ═══════════════════════════════════════════════════════════════
+  // RESPONSE ACTIONS
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Terminate process by PID
+   */
+  terminateProcess: async (pid) => {
+    const response = await apiClient.post(`/layer4/isolate/process/${pid}?force=true`);
+    return response.data;
+  },
 };

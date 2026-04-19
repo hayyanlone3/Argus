@@ -232,7 +232,7 @@ class CorrelatorService:
                 severity=severity,
                 mitre_stage=mitre_stage,
                 narrative=narrative,
-                status="OPEN"
+                status="NEW"
             )
             
             db.add(incident)
@@ -380,7 +380,7 @@ class CorrelatorService:
                     severity=max_sev,
                     mitre_stage=mitre_stage,
                     narrative=narrative,
-                    status="OPEN",
+                    status="NEW",
                 )
                 db.add(incident)
             else:

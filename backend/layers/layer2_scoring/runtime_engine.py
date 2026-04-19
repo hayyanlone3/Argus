@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, Optional
 
 from backend.shared.logger import setup_logger
-from backend.layers.layer2_scoring.event_stream import EVENT_QUEUE, TelemetryEvent, to_dict
+from backend.layers.layer2_scoring.event_stream import SCORING_QUEUE, TelemetryEvent, to_dict
 from backend.layers.layer4_response.isolation import IsolationService
 
 from backend.database import connection
@@ -437,7 +437,7 @@ class Layer2RuntimeEngine:
             }
 
             try:
-                evt: TelemetryEvent = EVENT_QUEUE.get(timeout=0.5)
+                evt: TelemetryEvent = SCORING_QUEUE.get(timeout=0.5)
             except Exception:
                 continue
 

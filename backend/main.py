@@ -26,6 +26,8 @@ from backend.layers.layer5_learning.routes import router as layer5_router
 
 # Layer 2 Engine
 from backend.layers.layer2_scoring.runtime_engine import Layer2RuntimeEngine
+# Layer 1 Ingestion
+from backend.layers.layer1_graph_engine.ingestion import GraphIngestionWorker
 
 
 from backend.collectors.sysmon_collector import SysmonCollector
@@ -54,6 +56,12 @@ async def lifespan(app: FastAPI):
         # ──────────────────────────────────────────────────────────
         app.state.layer2_engine = Layer2RuntimeEngine()
         app.state.layer2_engine.start()
+
+        # ──────────────────────────────────────────────────────────
+        # START Layer 1 Graph Ingestion
+        # ──────────────────────────────────────────────────────────
+        app.state.graph_worker = GraphIngestionWorker()
+        app.state.graph_worker.start()
 
 
         # ──────────────────────────────────────────────────────────
@@ -97,6 +105,13 @@ async def lifespan(app: FastAPI):
             e.stop()
     except Exception as ex:
         logger.error(f"❌ Failed to stop layer2 engine cleanly: {ex}")
+    try:
+        gw = getattr(app.state, "graph_worker", None)
+        if gw:
+            gw.stop()
+    except Exception as ex:
+        logger.error(f"❌ Failed to stop graph worker cleanly: {ex}")
+
     try:
         sm = getattr(app.state, "sysmon", None)
         if sm:
@@ -207,11 +222,16 @@ async def server_error_handler(request: Request, exc):
 # ═══════════════════════════════════════════════════════════════
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=False,
-        log_level="info",
-    )
+    # Run from repository root so `backend` is importable. Prefer:
+    #   python run_argus.py
+    # or:
+    #   uvicorn backend.main:app --host 127.0.0.1 --port 8000
+    import pathlib
+
+    root = pathlib.Path(__file__).resolve().parents[1]
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+
+    import run_argus
+
+    run_argus.main()
