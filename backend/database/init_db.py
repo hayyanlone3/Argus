@@ -25,13 +25,15 @@ def init_database():
         
         # Create all tables
         logger.info("📊 Creating all tables...")
-        Base.metadata.create_all(bind=engine)
+        from database.connection import init_db
+        init_db() # This sets the global engine and creates tables
         logger.info("✅ All tables created successfully")
         logger.info("")
         
         # Verify tables exist
         logger.info("✔️  Verifying tables...")
-        inspector = inspect(engine)
+        from database.connection import engine as conn_engine
+        inspector = inspect(conn_engine)
         tables = inspector.get_table_names()
         
         expected_tables = {

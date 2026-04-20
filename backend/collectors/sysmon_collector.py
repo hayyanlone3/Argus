@@ -116,10 +116,9 @@ class SysmonCollector:
                         rid = int(parsed["record_id"])
                         
                         if self._last_record_id is None:
-                            # JUMP START: Set threshold to just before the newest event
-                            # so we catch at least the most recent signal immediately.
-                            self._last_record_id = rid - 1
-                            logger.warning(f"🎯 Telemetry sensor initialized at RID: {rid}")
+                            # BOOTSTRAP: Look back 100 events to ensure we have context
+                            self._last_record_id = rid - 100
+                            logger.warning(f"🎯 Telemetry sensor BOOTSTRAPPED with 100-event lookback at RID: {rid}")
 
                         if rid <= self._last_record_id:
                             break

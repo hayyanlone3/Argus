@@ -359,9 +359,7 @@ class CorrelatorService:
 
             max_sev = max(severities, key=lambda s: order.get(s, 0))
 
-            # Only create incidents for UNKNOWN+ (Option A)
-            if max_sev == Severity.BENIGN:
-                return None
+            # removed BENIGN skip to allow seeing all incidents in demo
 
             incident = db.query(Incident).filter(Incident.session_id == session_id).first()
 

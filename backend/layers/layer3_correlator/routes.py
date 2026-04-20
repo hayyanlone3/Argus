@@ -245,7 +245,7 @@ async def get_incident_stats(db: Session = Depends(get_db)):
         
         # Count by status
         status_counts = {
-            "OPEN": len([i for i in incidents if i.status == "OPEN"]),
+            "OPEN": len([i for i in incidents if i.status in ("OPEN", "NEW")]),
             "ACKNOWLEDGED": len([i for i in incidents if i.status == "ACKNOWLEDGED"]),
             "FP": len([i for i in incidents if i.status == "FP"]),
             "TP": len([i for i in incidents if i.status == "TP"]),

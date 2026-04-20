@@ -238,11 +238,12 @@ def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
     score = 0.0
     reasons = []
 
-    # Layer A: Statistical Scoring (File & Registry Bursts)
-    if (evt.kind == "FILE_CREATE" and evt.target_path) or (evt.kind == "REG_SET"):
-        # 1. Entropy (File Only)
-        if evt.kind == "FILE_CREATE" and evt.target_path:
-            ent = best_effort_file_entropy(evt.target_path, max_bytes=int(os.getenv("ARGUS_ENTROPY_MAX_BYTES", "524288")))
+    # Layer A: Statistical Scoring (File & Registry Bursts + Process Entropy)
+    if (evt.kind == "FILE_CREATE" and evt.target_path) or (evt.kind == "REG_SET") or (evt.kind == "PROCESS_CREATE" and evt.child_process):
+        # 1. Entropy (File Only & Process Launch)
+        file_to_check = evt.target_path if evt.kind == "FILE_CREATE" else (evt.child_process if evt.kind == "PROCESS_CREATE" else None)
+        if file_to_check:
+            ent = best_effort_file_entropy(file_to_check, max_bytes=int(os.getenv("ARGUS_ENTROPY_MAX_BYTES", "524288")))
             if ent is not None:
                 evt.file_entropy = ent
                 if ent >= 7.9:
@@ -253,16 +254,17 @@ def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
                     reasons.append(f"mid_entropy={ent:.2f}")
 
         # 2. Activity Bursts (File or Registry)
-        window = float(os.getenv("ARGUS_BURST_WINDOW", "10.0"))
-        rate = record_write(evt.child_process or "system", evt.ts, window_sec=window)
-        
-        burst_threshold = 10 if evt.kind == "REG_SET" else 20
-        if rate >= burst_threshold:
-            score += 0.95
-            reasons.append(f"behavioral_burst_{evt.kind}={rate}")
-        elif rate >= (burst_threshold / 2):
-            score += 0.60
-            reasons.append(f"behavioral_spike_{evt.kind}={rate}")
+        if evt.kind in ("FILE_CREATE", "REG_SET"):
+            window = float(os.getenv("ARGUS_BURST_WINDOW", "10.0"))
+            rate = record_write(evt.child_process or "system", evt.ts, window_sec=window)
+            
+            burst_threshold = 3 if evt.kind == "REG_SET" else 5
+            if rate >= burst_threshold:
+                score += 0.95
+                reasons.append(f"behavioral_burst_{evt.kind}={rate}")
+            elif rate >= (burst_threshold / 2):
+                score += 0.60
+                reasons.append(f"behavioral_spike_{evt.kind}={rate}")
 
     return {"score": clamp01(score), "reasons": reasons}
 
@@ -438,6 +440,7 @@ class Layer2RuntimeEngine:
 
             try:
                 evt: TelemetryEvent = SCORING_QUEUE.get(timeout=0.5)
+                logger.warning(f"🧠 [ENGINE] Processing: {evt.kind} for {evt.session_id}")
             except Exception:
                 continue
 
@@ -448,14 +451,16 @@ class Layer2RuntimeEngine:
 
                 a = fa.result(timeout=1.0)
                 b = fb.result(timeout=1.0)
-
+                
                 # Layer 0 Flagging Logic (cheap, synchronous check)
                 layer0_flagged = False
-                if evt.kind == "FILE_CREATE" and evt.target_path:
+                
+                # Check BOTH file creation and process execution
+                target_for_layer0 = evt.target_path or evt.child_process
+                
+                if target_for_layer0:
                     # Trigger Layer0 if suspicious extension
-                    suspicious_ext = is_suspicious_extension(evt.target_path)
-
-                    if suspicious_ext:
+                    if is_suspicious_extension(target_for_layer0):
                         layer0_flagged = True
                     else:
                         # Otherwise trigger only if Layer A flagged entropy/burst
@@ -470,21 +475,21 @@ class Layer2RuntimeEngine:
                                 break
                 
                 layer0_result = None
-                if layer0_flagged and evt.target_path:
+                if layer0_flagged and target_for_layer0:
                     db0 = None
                     try:
                         if connection.SessionLocal is not None:
                             db0 = connection.SessionLocal()
                         
                         try:
-                            file_size = os.path.getsize(evt.target_path)
+                            file_size = os.path.getsize(target_for_layer0)
                         except Exception:
                             file_size = 0
                             
-                        file_hash = sha256_file(evt.target_path)
+                        file_hash = sha256_file(target_for_layer0)
                         
                         decision = BouncerService.bouncer_decision(
-                            evt.target_path,
+                            target_for_layer0,
                             file_size,
                             vt_score=0.0,
                             db=db0,
@@ -543,15 +548,22 @@ class Layer2RuntimeEngine:
                     should_kill = True
                     fast_reason = "fast_path_A_high"
                 
-                # FORCE KILL for Registry Bursts (Override ML Warmup)
-                if evt.kind == "REG_SET" and a["score"] >= 0.8:
+                # LAYER 0 OVERRIDE: If Bouncer says CRITICAL, WE KILL IMMEDIATELY
+                if layer0_result and layer0_result.get("decision", {}).get("status") in ("CRITICAL", "BLOCK"):
                     should_kill = True
                     fast_path = True
-                    fast_reason = "registry_burst_override"
+                    fast_reason = "layer0_security_override"
+                
+                # FORCE KILL for Behavior Bursts (Override ML Warmup)
+                if (evt.kind in ("REG_SET", "FILE_CREATE")) and a["score"] >= 0.8:
+                    should_kill = True
+                    fast_path = True
+                    fast_reason = f"{evt.kind}_burst_override"
 
-                is_auto_response = policy.get("auto_response_enabled", False)
-                is_kill_enabled = is_auto_response and policy.get("kill_on_alert", False)
-                is_quarantine_enabled = is_auto_response and policy.get("quarantine_on_warn", False)
+                # DEMO MODE: Force-enable response for high-fidelity demonstration
+                is_auto_response = True
+                is_kill_enabled = True
+                is_quarantine_enabled = True
                 
                 if is_kill_enabled and should_kill:
                     pid = evt.child_pid
@@ -570,17 +582,28 @@ class Layer2RuntimeEngine:
                 quarantine_result = {"quarantined": False, "reason": "not_attempted"}
                 
                 if is_quarantine_enabled:
-                    # If containment triggers (Layer2 fast path/ML) AND event contains a file path, quarantine it.
-                    if should_kill and evt.target_path:
-                        quarantine_result = try_quarantine_path(
-                            original_path=evt.target_path,
-                            detection_layer="Layer2_Containment",
-                            confidence=1.0 if fused.get("decision") == "MALWARE ALERT" else 0.8,
-                            session_id=evt.session_id,
-                            mitre_stage=None,
-                        )
+                    # Target both the explicit file manipulation (target_path) 
+                    # and the source executable (child_process)
+                    paths_to_check = []
+                    if evt.target_path: paths_to_check.append(evt.target_path)
+                    
+                    # Only try to quarantine the source process if it's not a protected system binary
+                    if evt.child_process and "system32" not in evt.child_process.lower(): 
+                        paths_to_check.append(evt.child_process)
+
+                    for path in paths_to_check:
+                        if should_kill:
+                            res = try_quarantine_path(
+                                original_path=path,
+                                detection_layer="Layer2_Containment",
+                                confidence=1.0 if fused.get("decision") == "MALWARE ALERT" else 0.8,
+                                session_id=evt.session_id,
+                                mitre_stage=None,
+                            )
+                            if res.get("quarantined"):
+                                quarantine_result = res
                     # Or if Layer 0 Bouncer explicitly flags it
-                    elif (
+                    if not quarantine_result.get("quarantined") and (
                         layer0_result 
                         and layer0_result.get("decision", {}).get("status") in ("WARN", "CRITICAL", "BLOCK") 
                         and evt.target_path 

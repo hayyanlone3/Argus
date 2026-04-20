@@ -2,17 +2,11 @@
   <EventFiltering>
 
     <!-- Process Creation (reduced noise, security-relevant children) -->
-    <ProcessCreate onmatch="include">
-      <Image condition="end with">cmd.exe</Image>
-      <Image condition="end with">powershell.exe</Image>
-      <Image condition="end with">pwsh.exe</Image>
-      <Image condition="end with">wscript.exe</Image>
-      <Image condition="end with">cscript.exe</Image>
-      <Image condition="end with">mshta.exe</Image>
-      <Image condition="end with">rundll32.exe</Image>
-      <Image condition="end with">regsvr32.exe</Image>
-      <Image condition="end with">certutil.exe</Image>
-      <Image condition="end with">bitsadmin.exe</Image>
+    <!-- Process Creation (Catch everything except extremely noisy system processes) -->
+    <ProcessCreate onmatch="exclude">
+      <Image condition="is">C:\Windows\System32\conhost.exe</Image>
+      <Image condition="is">C:\Windows\System32\SearchFilterHost.exe</Image>
+      <Image condition="is">C:\Windows\System32\SearchProtocolHost.exe</Image>
     </ProcessCreate>
 
     <!-- File Creation (IMPORTANT) -->

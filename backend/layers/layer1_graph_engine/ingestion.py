@@ -36,6 +36,7 @@ class GraphIngestionWorker:
         while not self._stop.is_set():
             try:
                 evt = GRAPH_QUEUE.get(timeout=1.0)
+                logger.info(f"💾 [INGESTION] Writing: {evt.kind}")
             except:
                 continue
 

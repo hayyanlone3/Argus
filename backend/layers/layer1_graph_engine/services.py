@@ -131,8 +131,8 @@ class GraphService:
 
             # NEW: Layer 3 auto-incident creation for suspicious events
             try:
-                if new_edge.final_severity in (Severity.UNKNOWN, Severity.WARNING, Severity.CRITICAL):
-                    CorrelatorService.upsert_incident_for_session(db, new_edge.session_id)
+                # Trigger for all edges so even harmless simulation telemetry becomes an incident
+                CorrelatorService.upsert_incident_for_session(db, new_edge.session_id)
             except Exception:
                 logger.exception("❌ Layer3 auto-incident creation failed")
 

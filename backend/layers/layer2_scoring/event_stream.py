@@ -5,6 +5,9 @@ import threading
 from dataclasses import dataclass, asdict
 from queue import Queue
 from typing import Any, Dict, Optional
+from backend.shared.logger import setup_logger
+
+logger = setup_logger(__name__)
 
 # shared queue for telemetry events (sysmon → layer2 workers)
 # shared queues for telemetry events
@@ -45,11 +48,12 @@ def publish_event(evt: TelemetryEvent) -> None:
     """
     try:
         print(f"[COLLECTOR] Emitting event: {evt.kind}")
+        logger.info(f"🚀 [EVENT_STREAM] Publishing {evt.kind} (ID: {evt.event_id})")
         EVENT_QUEUE.put_nowait(evt)
         SCORING_QUEUE.put_nowait(evt)
         GRAPH_QUEUE.put_nowait(evt)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"❌ [EVENT_STREAM] Failed to publish: {e}")
 
 def to_dict(evt: TelemetryEvent) -> Dict[str, Any]:
     return asdict(evt)

@@ -41,6 +41,16 @@ logger = setup_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application startup and shutdown events"""
+    from backend.layers.layer2_scoring.event_stream import SCORING_QUEUE, GRAPH_QUEUE, EVENT_QUEUE
+    from queue import Empty
+
+    # Purge old queues to ensure fresh demo context
+    for q in [SCORING_QUEUE, GRAPH_QUEUE, EVENT_QUEUE]:
+        while not q.empty():
+            try:
+                q.get_nowait()
+            except Empty:
+                break
 
     # STARTUP
     try:

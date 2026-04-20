@@ -182,7 +182,7 @@ export default function IncidentDetail() {
               </button>
            </div>
 
-           <div className="flex-grow">
+           <div className="grow">
               {activeTab === 'graph' ? (
                  <D3ProvenanceGraph 
                     nodes={incidentData.nodes || []} 

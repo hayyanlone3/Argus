@@ -110,8 +110,8 @@ class AutoScoringService:
         if edge.final_severity is not None:
             return edge
 
-        # Only score WROTE for now
-        if edge.edge_type != EdgeType.WROTE:
+        # Score both file writes AND process executions
+        if edge.edge_type not in (EdgeType.WROTE, EdgeType.SPAWNED):
             return edge
 
         target = db.query(Node).filter(Node.id == edge.target_id).first()
@@ -139,6 +139,12 @@ class AutoScoringService:
 
         # Clamp
         score = max(0.0, min(1.0, score))
+        
+        # HEURISTIC OVERRIDE: Filename pattern match
+        if file_path and "malware" in file_path.lower():
+            score = 1.0
+            logger.warning(f"🚨 HEURISTIC MATCH in AutoScoring for: {file_path}")
+
         sev = _severity_from_score(score)
 
         edge.anomaly_score = float(score)

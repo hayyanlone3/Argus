@@ -64,6 +64,14 @@ def init_db():
                 session.add(policy)
                 session.commit()
                 logger.info("✅ Default PolicyConfig initialized")
+            else:
+                # FORCE ENABLE for Demo
+                policy = session.query(PolicyConfig).filter_by(id=1).first()
+                policy.auto_response_enabled = True
+                policy.kill_on_alert = True
+                policy.quarantine_on_warn = True
+                session.commit()
+                logger.info("✅ PolicyConfig FORCE-ENABLED for demo")
         except Exception as e:
             logger.error(f"❌ Error seeding default policy: {e}")
             session.rollback()

@@ -88,43 +88,57 @@ export default function ProvGraph() {
     return sig;
   };
 
-  useEffect(() => {
-    let mounted = true;
-    let lastSig = "";
-
-    const run = async (initial = false) => {
-      try {
-        if (initial) setLoading(true);
-        else {
-            setRefreshing(true);
-            setError(null);
+    useEffect(() => {
+      let mounted = true;
+      let lastSig = "";
+      
+      const run = async (initial = false) => {
+        try {
+          if (initial) setLoading(true);
+          else {
+              setRefreshing(true);
+              setError(null);
+          }
+  
+          const sig = await fetchGraph();
+  
+          if (mounted && sig !== lastSig) {
+            lastSig = sig;
+          }
+        } catch (err) {
+          if (!mounted) return;
+          setError(err.message);
+        } finally {
+          if (!mounted) return;
+          if (initial) setLoading(false);
+          else setRefreshing(false);
         }
-
-        const sig = await fetchGraph();
-
-        // Build a cheap signature so we don't update state if nothing changed
-        // (prevents D3 graph from re-layouting constantly)
-        if (mounted && sig !== lastSig) {
-          lastSig = sig;
+      };
+  
+      run(true);
+      
+      // Use SSE instead of setInterval for real-time Provenance graph viewing
+      const es = graphService.streamGraphEvents(
+        { suspiciousOnly: false, sysmonOnly: false, minAnomalyScore: 0.0 },
+        (event) => {
+            if (event.type === 'edge_created' || event.type === 'node_updated') {
+                run(false);
+            }
+        },
+        (errorMsg) => {
+            // Optional: Handle SSE error without breaking UI
+            console.warn("SSE stream issue:", errorMsg);
         }
-      } catch (err) {
-        if (!mounted) return;
-        setError(err.message);
-      } finally {
-        if (!mounted) return;
-        if (initial) setLoading(false);
-        else setRefreshing(false);
-      }
-    };
-
-    run(true);
-    const interval = setInterval(() => run(false), 30000); // was 15000; reduce load
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedNodeId]); // Re-bind closure to correctly check selectedNodeId in fetchGraph
+      );
+      
+      return () => {
+        mounted = false;
+        if (es) {
+            es.close();
+        }
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedNodeId]);
 
   const onToggleEdgeType = (t) => {
     setEdgeTypeFilter(prev => {
