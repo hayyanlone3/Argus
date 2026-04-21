@@ -1,6 +1,7 @@
 // src/pages/Layer0Dashboard.jsx
 import React, { useState, useEffect } from 'react';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import apiClient from '../config/api';
 
 export default function Layer0Dashboard() {
   const [recentScans, setRecentScans] = useState([]);
@@ -9,11 +10,8 @@ export default function Layer0Dashboard() {
   // Fetch recent background scans from kernel telemetry
   const fetchRecentScans = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/layer0/recent-analysis?limit=25');
-      if (response.ok) {
-        const data = await response.json();
-        setRecentScans(data);
-      }
+      const response = await apiClient.get('/layer0/recent-analysis?limit=25');
+      setRecentScans(response.data);
     } catch (err) {
       console.error('Failed to fetch scans:', err);
     } finally {
@@ -33,7 +31,6 @@ export default function Layer0Dashboard() {
       <div className="flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 flex items-center gap-3">
-            <span className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg shadow-indigo-100">🔒</span>
             Layer 0: Autonomous Bouncer
           </h1>
           <p className="text-slate-500 mt-2 ml-14 max-w-2xl">
@@ -57,10 +54,9 @@ export default function Layer0Dashboard() {
         <div className="xl:col-span-1 space-y-6">
           <div className="bg-slate-900 rounded-2xl p-6 text-white shadow-2xl overflow-hidden relative border border-slate-800">
             <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none transform translate-x-4 -translate-y-4">
-                <span className="text-9xl font-black">AI</span>
             </div>
             <h3 className="font-bold text-lg mb-6 flex items-center gap-3 border-b border-slate-700 pb-4">
-              <span className="text-indigo-400">🛡️</span> Security Policy
+              <span className="text-indigo-400"></span> Security Policy
             </h3>
             <div className="space-y-6">
                 <div>
@@ -78,13 +74,12 @@ export default function Layer0Dashboard() {
                     <div className="pt-4 border-t border-slate-800">
                         <ul className="space-y-4">
                             {[
-                                {label: "VirusTotal Lookup", icon: "🌐"},
-                                {label: "Entropy Verification", icon: "📊"},
-                                {label: "Signature Validation", icon: "🖊️"},
-                                {label: "Auto-Quarantine", icon: "⚡"}
+                                {label: "VirusTotal Lookup"},
+                                {label: "Entropy Verification"},
+                                {label: "Signature Validation"},
+                                {label: "Auto-Quarantine"}
                             ].map((item, i) => (
                                 <li key={i} className="flex items-center gap-3 text-xs font-semibold text-slate-200">
-                                    <span className="flex-shrink-0 w-6 h-6 rounded-lg bg-slate-800 flex items-center justify-center text-[10px] border border-slate-700">{item.icon}</span>
                                     {item.label}
                                 </li>
                             ))}
@@ -193,7 +188,7 @@ export default function Layer0Dashboard() {
                                 {scan.status}
                               </span>
                               {scan.status !== 'PASS' && (
-                                 <span className="animate-bounce text-xs" title="Auto-Quarantined">🛡️</span>
+                                 <span className="animate-bounce text-xs" title="Auto-Quarantined"></span>
                               )}
                           </div>
                         </td>

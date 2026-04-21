@@ -35,7 +35,7 @@ export default function FPRateChart() {
 
   return (
     <div className="card">
-      <h3 className="font-bold text-lg mb-4">📊 False Positive Rate</h3>
+      <h3 className="font-bold text-lg mb-4">False Positive Rate</h3>
 
       <div className="text-center mb-4">
         <div className="text-4xl font-bold text-red-600 mb-2">{fpRate.toFixed(1)}%</div>

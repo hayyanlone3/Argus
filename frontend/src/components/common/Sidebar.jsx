@@ -8,13 +8,13 @@ export default function Sidebar() {
   const isActive = (path) => location.pathname === path;
 
   const navItems = [
-    { path: '/', label: '📊 Dashboard', color: 'text-gray-600' },
-    { path: '/layer0', label: '🔒 Layer 0: Bouncer', color: 'text-layer0' },
-    { path: '/layer1', label: '🌳 Layer 1: Graph', color: 'text-layer1' },
-    { path: '/layer2', label: '📈 Layer 2: Scoring', color: 'text-layer2' },
-    { path: '/layer3', label: '🔗 Layer 3: Correlator', color: 'text-layer3' },
-    { path: '/layer4', label: '🛡️  Layer 4: Response', color: 'text-layer4' },
-    { path: '/layer5', label: '🧠 Layer 5: Learning', color: 'text-layer5' },
+    { path: '/', label: 'Dashboard', color: 'text-gray-600' },
+    { path: '/layer0', label: 'Layer 0 Bouncer', color: 'text-layer0' },
+    { path: '/layer1', label: 'Layer 1 Graph', color: 'text-layer1' },
+    { path: '/layer2', label: 'Layer 2 Scoring', color: 'text-layer2' },
+    { path: '/layer3', label: 'Layer 3 Correlator', color: 'text-layer3' },
+    { path: '/layer4', label: 'Layer 4 Response', color: 'text-layer4' },
+    { path: '/layer5', label: 'Layer 5 Learning', color: 'text-layer5' },
   ];
 
   return (

@@ -69,10 +69,6 @@ export default function WhitelistManager() {
         <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-400 mb-4 flex items-center gap-2">
            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span> Anomaly Score Suppression
         </h4>
-        
-        <p className="text-[10px] text-slate-400 mb-4 leading-relaxed max-w-md">
-           Novelty: Whitelisting in Argus doesn't just "hide" alerts. It applies a **Score Bias** that suppresses behavioral rarity, preventing false positives during legitimate high-activity events like system updates.
-        </p>
 
         <form onSubmit={handleAddEntry} className="grid grid-cols-1 md:grid-cols-4 gap-3">
           <div className="md:col-span-2">
@@ -124,7 +120,7 @@ export default function WhitelistManager() {
 
       {!whitelist.length && !loading ? (
         <div className="py-20 flex flex-col items-center justify-center text-center opacity-40">
-           <div className="text-4xl mb-4">🛡️</div>
+           <div className="text-4xl mb-4"></div>
            <div className="max-w-[200px] text-xs font-bold leading-relaxed">No trust rules defined. Your system is currently in Maximum Security mode.</div>
         </div>
       ) : (

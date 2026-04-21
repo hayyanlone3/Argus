@@ -44,7 +44,7 @@ class QuarantineService:
             if not os.path.exists(file_path):
                 raise ValidationError(f"File not found: {file_path}")
             
-            logger.info(f"🚫 Quarantining file: {file_path}")
+            logger.info(f"Quarantining file: {file_path}")
             
             # Ensure quarantine directory exists
             quarantine_dir = Path(settings.quarantine_dir)

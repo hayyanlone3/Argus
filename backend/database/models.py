@@ -17,7 +17,6 @@ Base = declarative_base()
 
 
 class Node(Base):
-    """Graph node representing process, file, script, WMI, or registry."""
     __tablename__ = "nodes"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -40,7 +39,6 @@ class Node(Base):
 
 
 class Edge(Base):
-    """Graph edge representing relationships (SPAWNED, READ, WROTE, INJECTED, etc.)."""
     __tablename__ = "edges"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -76,7 +74,6 @@ class Edge(Base):
 
 
 class Incident(Base):
-    """Correlated incident (group of related edges)."""
     __tablename__ = "incidents"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -100,7 +97,6 @@ class Incident(Base):
 
 
 class Quarantine(Base):
-    """Quarantined files."""
     __tablename__ = "quarantine"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -119,7 +115,6 @@ class Quarantine(Base):
 
 
 class Whitelist(Base):
-    """Whitelist entries (Tier 1/2/3)."""
     __tablename__ = "whitelist"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -136,7 +131,6 @@ class Whitelist(Base):
 
 
 class VTCache(Base):
-    """VirusTotal cache."""
     __tablename__ = "vt_cache"
 
     hash_sha256 = Column(String(64), primary_key=True)
@@ -145,7 +139,6 @@ class VTCache(Base):
 
 
 class Feedback(Base):
-    """Analyst feedback on incidents."""
     __tablename__ = "feedback"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -156,7 +149,6 @@ class Feedback(Base):
 
 
 class PolicyConfig(Base):
-    """Global auto-response policy configuration."""
     __tablename__ = "policy_config"
 
     id = Column(Integer, primary_key=True, default=1)
@@ -167,12 +159,9 @@ class PolicyConfig(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 
-# ═══════════════════════════════════════════════════════════════
 # AUDIT LOGS (stored in PostgreSQL)
-# ═══════════════════════════════════════════════════════════════
 
 class AuditLog(Base):
-    """Audit / event log stored in PostgreSQL for forensic trail."""
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)

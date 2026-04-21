@@ -14,24 +14,23 @@ logger = setup_logger(__name__)
 
 
 def init_database():
-    """Initialize database tables and verify connection."""
     try:
         logger.info("=" * 80)
-        logger.info("🗄️  INITIALIZING DATABASE")
+        logger.info("INITIALIZING DATABASE")
         logger.info("=" * 80)
         logger.info(f"Database Type: {settings.database_type}")
         logger.info(f"Database URL: {settings.database_url[:60]}...")
         logger.info("")
         
         # Create all tables
-        logger.info("📊 Creating all tables...")
+        logger.info("Creating all tables...")
         from database.connection import init_db
         init_db() # This sets the global engine and creates tables
-        logger.info("✅ All tables created successfully")
+        logger.info("All tables created successfully")
         logger.info("")
         
         # Verify tables exist
-        logger.info("✔️  Verifying tables...")
+        logger.info("Verifying tables...")
         from database.connection import engine as conn_engine
         inspector = inspect(conn_engine)
         tables = inspector.get_table_names()
@@ -45,18 +44,18 @@ def init_database():
         
         for table in expected_tables:
             if table in created_tables:
-                logger.info(f"  ✅ {table}")
+                logger.info(f"{table}")
             else:
-                logger.error(f"  ❌ {table} (MISSING)")
+                logger.error(f"{table} (MISSING)")
                 return False
         
         logger.info("")
-        logger.info(f"✅ All {len(expected_tables)} tables verified")
+        logger.info(f"All {len(expected_tables)} tables verified")
         
         return True
         
     except Exception as e:
-        logger.error(f"❌ Database initialization failed: {e}")
+        logger.error(f"Database initialization failed: {e}")
         return False
 
 
@@ -70,29 +69,28 @@ def verify_connection():
         db.execute(text("SELECT 1"))
         db.close()
         
-        logger.info("✅ Database connection verified")
+        logger.info("Database connection verified")
         return True
     
     except Exception as e:
-        logger.error(f"❌ Database connection failed: {e}")
+        logger.error(f"Database connection failed: {e}")
         return False
 
 
 def create_sample_data():
-    """Create sample data for testing."""
     try:
         from database.models import Node
         from shared.enums import NodeType
         
         logger.info("")
-        logger.info("📝 Creating sample data...")
+        logger.info("Creating sample data...")
         
         db = connection.SessionLocal()
         
         # Check if sample data already exists
         existing = db.query(Node).first()
         if existing:
-            logger.info("⚠️  Sample data already exists, skipping")
+            logger.info("Sample data already exists, skipping")
             db.close()
             return True
         
@@ -108,12 +106,12 @@ def create_sample_data():
         db.add(sample_node)
         db.commit()
         
-        logger.info("✅ Sample data created successfully")
+        logger.info("Sample data created successfully")
         db.close()
         return True
     
     except Exception as e:
-        logger.error(f"❌ Failed to create sample data: {e}")
+        logger.error(f"Failed to create sample data: {e}")
         return False
 
 
@@ -136,7 +134,7 @@ if __name__ == "__main__":
     
     logger.info("")
     logger.info("=" * 80)
-    logger.info("🎉 DATABASE READY!")
+    logger.info("DATABASE READY!")
     logger.info("=" * 80)
     logger.info("")
     logger.info("Next steps:")

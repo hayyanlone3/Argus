@@ -95,10 +95,10 @@ export default function Layer2Dashboard() {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-slate-900 text-xl font-semibold tracking-wide">
-              Layer 2 • Live Scoring (Sysmon only)
+              Layer 2 Live Scoring (Sysmon only)
             </div>
             <div className="text-slate-500 text-sm font-mono">
-              3-channel parallel scoring (A/B/C) + fusion decision • {header}
+              3-channel parallel scoring (A/B/C) + fusion decision {header}
             </div>
           </div>
 
@@ -169,7 +169,7 @@ export default function Layer2Dashboard() {
                     <div>
                       <div className="text-slate-900 font-semibold">{title || '—'}</div>
                       <div className="text-xs text-slate-500 font-mono mt-1">
-                        {evt.kind} • {evt.source} • {evt.event_id}
+                        {evt.kind} {evt.source} {evt.event_id}
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">

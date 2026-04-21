@@ -21,34 +21,28 @@ export default function RetrainingLog() {
   };
 
   return (
-    <div className="card">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-bold text-lg">🔄 Retraining</h3>
-        <button
-          onClick={handleRetrain}
-          disabled={loading}
-          className="btn-primary btn-sm"
-        >
-          {loading ? 'Retraining...' : 'Manual Retrain'}
-        </button>
-      </div>
-
-      <p className="text-sm text-gray-600 mb-4">
-        Automatic weekly retraining: <strong>Friday 23:00 UTC</strong>
-      </p>
-
-      {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
+    <div className="space-y-4">
+      {error && <p className="text-red-600 text-sm mb-4 font-medium flex items-center gap-2">⚠️ {error}</p>}
 
       {result && (
-        <div className={`p-3 rounded-lg border mb-3 ${
-          result.status === 'completed' ? 'border-green-600 bg-green-50' : 'border-red-600 bg-red-50'
+        <div className={`p-4 rounded-lg border mb-3 ${
+          result.status === 'completed' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
         }`}>
-          <p className="font-semibold text-sm mb-1">Status: {result.status}</p>
-          <p className="text-xs text-gray-700">{result.reason}</p>
+          <div className="flex items-center justify-between mb-2">
+            <p className="font-bold text-sm text-slate-800">Status: {result.status.toUpperCase()}</p>
+            {result.status === 'completed' && <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />}
+          </div>
+          <p className="text-xs text-slate-600 leading-relaxed mb-3">{result.reason}</p>
           {result.metrics && (
-            <div className="text-xs text-gray-600 mt-2 space-y-1">
-              <p>Quality: {result.metrics.quality_score?.toFixed(1)}/100</p>
-              <p>FP Rate: {result.metrics.fp_rate?.toFixed(2)}%</p>
+            <div className="grid grid-cols-2 gap-3 pt-3 border-t border-slate-200/50">
+              <div className="bg-white/50 p-2 rounded border border-slate-100">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Quality</p>
+                <p className="text-sm font-extrabold text-slate-700">{result.metrics.quality_score?.toFixed(1)}%</p>
+              </div>
+              <div className="bg-white/50 p-2 rounded border border-slate-100">
+                <p className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">FP Rate</p>
+                <p className="text-sm font-extrabold text-slate-700">{result.metrics.fp_rate?.toFixed(2)}%</p>
+              </div>
             </div>
           )}
         </div>

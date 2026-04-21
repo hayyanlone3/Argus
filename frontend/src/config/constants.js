@@ -66,15 +66,6 @@ export const LAYER_DESCRIPTIONS = {
   5: 'Continuous model improvement via retraining',
 };
 
-export const LAYER_ICONS = {
-  0: '🔒',
-  1: '🌳',
-  2: '📈',
-  3: '🔗',
-  4: '🛡️',
-  5: '🧠',
-};
-
 // ═══════════════════════════════════════════════════════════════
 // EDGE TYPES
 // ═══════════════════════════════════════════════════════════════
@@ -89,17 +80,6 @@ export const EDGE_TYPES = [
   'MODIFIED_REG',
   'DISABLED_AMSI',
 ];
-
-export const EDGE_TYPE_ICONS = {
-  SPAWNED: '👶',
-  READ: '📖',
-  WROTE: '✏️',
-  INJECTED_INTO: '💉',
-  EXECUTED_SCRIPT: '⚙️',
-  SUBSCRIBED_WMI: '📡',
-  MODIFIED_REG: '🔧',
-  DISABLED_AMSI: '🚫',
-};
 
 export const EDGE_TYPE_COLORS = {
   SPAWNED: '#0dcaf0',
@@ -123,14 +103,6 @@ export const NODE_TYPES = [
   'wmi_object',
   'reg_key',
 ];
-
-export const NODE_TYPE_ICONS = {
-  process: '⚙️',
-  file: '📄',
-  script: '📜',
-  wmi_object: '📡',
-  reg_key: '🔑',
-};
 
 export const NODE_TYPE_COLORS = {
   process: '#0d6efd',
@@ -245,13 +217,13 @@ export const WHITELIST_TIERS = {
 // ═══════════════════════════════════════════════════════════════
 
 export const NAV_ITEMS = [
-  { path: '/', label: '📊 Dashboard', color: 'text-gray-600' },
-  { path: '/layer0', label: '🔒 Layer 0: Bouncer', color: 'text-layer0' },
-  { path: '/layer1', label: '🌳 Layer 1: Graph', color: 'text-layer1' },
-  { path: '/layer2', label: '📈 Layer 2: Scoring', color: 'text-layer2' },
-  { path: '/layer3', label: '🔗 Layer 3: Correlator', color: 'text-layer3' },
-  { path: '/layer4', label: '🛡️ Layer 4: Response', color: 'text-layer4' },
-  { path: '/layer5', label: '🧠 Layer 5: Learning', color: 'text-layer5' },
+  { path: '/', label: 'Dashboard', color: 'text-gray-600' },
+  { path: '/layer0', label: 'Layer 0: Bouncer', color: 'text-layer0' },
+  { path: '/layer1', label: 'Layer 1: Graph', color: 'text-layer1' },
+  { path: '/layer2', label: 'Layer 2: Scoring', color: 'text-layer2' },
+  { path: '/layer3', label: 'Layer 3: Correlator', color: 'text-layer3' },
+  { path: '/layer4', label: 'Layer 4: Response', color: 'text-layer4' },
+  { path: '/layer5', label: 'Layer 5: Learning', color: 'text-layer5' },
 ];
 
 // ═══════════════════════════════════════════════════════════════

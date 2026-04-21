@@ -33,31 +33,53 @@ export default function ModelMaturity() {
   const percent = progress?.model_maturity_percent || 0;
 
   return (
-    <div className="card">
-      <h3 className="font-bold text-lg mb-4">🧠 Model Maturity</h3>
+    <div className="card h-full flex flex-col items-center text-center p-8 border border-slate-200 bg-white rounded-2xl shadow-sm">
+      <div className="w-full max-w-md">
+        <h3 className="font-extrabold text-xl text-slate-800 mb-1 tracking-tight">Model Maturity</h3>
+        <p className="text-slate-500 text-sm mb-8 font-medium italic">Establishing baseline behavioral patterns</p>
 
-      <div className="mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-semibold">Progress</span>
-          <span className="text-sm font-bold text-red-600">{percent.toFixed(1)}%</span>
+        <div className="relative mb-8">
+          <div className="flex items-end justify-between mb-3 px-1">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Training Progress</span>
+            <span className={`text-sm font-black ${percent >= 100 ? 'text-emerald-600' : 'text-indigo-600'}`}>
+              {percent.toFixed(1)}%
+            </span>
+          </div>
+          <div className="w-full bg-slate-100 rounded-full h-4 overflow-hidden border border-slate-200 p-1 shadow-inner">
+            <div
+              className={`h-full rounded-full transition-all duration-1000 ease-out shadow-sm ${
+                percent >= 100 ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : 'bg-gradient-to-r from-indigo-600 to-purple-600'
+              }`}
+              style={{ width: `${percent}%` }}
+            />
+          </div>
+          {percent < 100 && (
+            <div className="mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+              Awaiting maturity threshold (14 days)
+            </div>
+          )}
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
-          <div
-            className="bg-red-600 h-2 rounded-full transition-all duration-500"
-            style={{ width: `${percent}%` }}
-          />
+
+        <div className="grid grid-cols-2 gap-4 mb-8">
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 shadow-sm">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 text-center">Time Elapsed</p>
+            <p className="text-xl font-extrabold text-slate-800">{progress?.days_deployed || 0} <span className="text-xs font-medium text-slate-500">Days</span></p>
+          </div>
+          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 shadow-sm">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1 text-center">Engine State</p>
+            <p className={`text-xl font-bold uppercase tracking-tighter ${progress?.status === 'matured' ? 'text-emerald-600' : 'text-amber-600'}`}>
+              {progress?.status || 'Learning'}
+            </p>
+          </div>
         </div>
-      </div>
 
-      <div className="text-sm text-gray-600 mb-4">
-        <p>Days Deployed: <strong>{progress?.days_deployed}</strong></p>
-        <p>Status: <strong>{progress?.status}</strong></p>
-      </div>
-
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs">
-        <p className="text-blue-800">
-          Model matures after 14 days. Current: {progress?.days_deployed} days
-        </p>
+        <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 text-xs font-medium text-indigo-700 leading-relaxed shadow-sm">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <span className="font-bold uppercase tracking-wide">Maturity Advisory</span>
+          </div>
+          The model reaches peak forensic accuracy after 14 days of baseline profiling. 
+          Current phase: <strong className="font-extrabold text-indigo-900">{progress?.days_deployed || 0} / 14 days</strong>.
+        </div>
       </div>
     </div>
   );

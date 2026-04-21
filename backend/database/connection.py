@@ -12,7 +12,6 @@ SessionLocal = None
 
 
 def init_db():
-    """Initialize database connection and create all tables."""
     global engine, SessionLocal
     
     try:
@@ -88,7 +87,6 @@ def init_db():
 
 
 def get_db() -> Session:
-    """Get database session for dependency injection in FastAPI."""
     db = SessionLocal()
     try:
         yield db
@@ -97,7 +95,6 @@ def get_db() -> Session:
 
 
 def close_db():
-    """Close database connection."""
     if engine:
         engine.dispose()
         logger.info("✅ Database connection closed")

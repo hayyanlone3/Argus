@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { graphService } from '../../services/graphService';
 import LoadingSpinner from '../common/LoadingSpinner';
-import EdgeLegend from './EdgeLegend';
+
 import D3ProvenanceGraph from './D3ProvenanceGraph';
 import NodeDetail from './NodeDetail';
 
@@ -203,7 +203,7 @@ export default function ProvGraph() {
             Reset
           </button>
           <span className="text-sm text-gray-600">
-            {filteredViewNodes.length} nodes • {filteredViewEdges.length} edges
+            {filteredViewNodes.length} nodes {filteredViewEdges.length} edges
           </span>
         </div>
       </div>
@@ -255,9 +255,7 @@ export default function ProvGraph() {
         </div>
       </div>
 
-      <div className="mt-3">
-        <EdgeLegend />
-      </div>
+
     </div>
   );
 }

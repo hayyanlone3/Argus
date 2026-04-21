@@ -21,10 +21,9 @@ from backend.database.models import PolicyConfig
 
 logger = setup_logger(__name__)
 
-# Optional River ML import for Layer C
 RIVER_AVAILABLE = False
 try:
-    from river import anomaly  # type: ignore
+    from river import anomaly
     RIVER_AVAILABLE = True
 except Exception:
     RIVER_AVAILABLE = False
@@ -440,7 +439,7 @@ class Layer2RuntimeEngine:
 
             try:
                 evt: TelemetryEvent = SCORING_QUEUE.get(timeout=0.5)
-                logger.warning(f"🧠 [ENGINE] Processing: {evt.kind} for {evt.session_id}")
+                logger.warning(f"[ENGINE] Processing: {evt.kind} for {evt.session_id}")
             except Exception:
                 continue
 

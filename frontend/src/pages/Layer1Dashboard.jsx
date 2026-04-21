@@ -51,7 +51,7 @@ export default function Layer1Dashboard() {
                 </svg>
               </div>
               <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
-                Layer 1 <span className="text-slate-300 mx-2">•</span> Graph Engine
+                Layer 1 <span className="text-slate-300 mx-2"></span> Graph Engine
               </h1>
             </div>
             <p className="text-slate-500 text-sm md:text-base font-medium ml-11">
@@ -127,42 +127,6 @@ export default function Layer1Dashboard() {
 
       {/* Graph Visualization */}
       <ProvGraph />
-
-      {/* Info Section */}
-      <div className="flex items-start gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 shadow-sm">
-        <div className="flex-shrink-0 rounded-full bg-white p-2 shadow-sm border border-emerald-100 mt-1">
-          <span className="text-xl leading-none block">💡</span>
         </div>
-        <div className="w-full">
-          <h3 className="text-emerald-900 font-extrabold text-lg mb-3 tracking-tight">About Layer 1</h3>
-          <ul className="space-y-3 text-sm text-emerald-800 font-medium">
-            <li className="flex items-start gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span><strong className="text-emerald-900">Event Collection:</strong> ETW, Threat Intel, AMSI, Registry, WMI</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span><strong className="text-emerald-900">Node Types:</strong> Process, File, Script, WMI Object, Registry Key</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span><strong className="text-emerald-900">Edge Types:</strong> SPAWNED, READ, WROTE, INJECTED_INTO, and more</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-              </svg>
-              <span><strong className="text-emerald-900">Active Window:</strong> 24 hours in-memory, 30 days queryable archive</span>
-            </li>
-          </ul>
-        </div>
-      </div>
-    </div>
   );
 }

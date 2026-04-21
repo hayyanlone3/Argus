@@ -1,8 +1,4 @@
 # backend/layers/layer5_learning/retrainer.py
-"""
-Layer 5: Retraining Service
-Weekly model retraining on verified feedback
-"""
 
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
@@ -15,29 +11,9 @@ logger = setup_logger(__name__)
 
 
 class RetrainingService:
-    """Layer 5: Retraining Service for continuous improvement"""
     
     @staticmethod
     def get_weekly_data(db: Session, days: int = 7) -> dict:
-        """
-        Fetch all incidents and feedback from past N days.
-        Used for weekly retraining.
-        
-        Args:
-            db: Database session
-            days: Days back to look
-            
-        Returns:
-            {
-                "incidents": [Incident],
-                "feedbacks": [Feedback],
-                "tp_count": int,
-                "fp_count": int,
-                "unknown_count": int,
-                "fp_rate": float,
-                "data_quality": float
-            }
-        """
         try:
             cutoff_time = datetime.utcnow() - timedelta(days=days)
             
@@ -181,29 +157,15 @@ class RetrainingService:
     
     @staticmethod
     def evaluate_model_quality(weekly_data: dict) -> dict:
-        """
-        Evaluate current model quality metrics.
-        
-        Args:
-            weekly_data: Output from get_weekly_data()
-            
-        Returns:
-            {
-                "fp_rate": float,
-                "quality_score": float (0-100),
-                "ready_for_production": bool,
-                "recommendations": [str]
-            }
-        """
         try:
             fp_rate = weekly_data.get("fp_rate", 100.0)
             data_quality = weekly_data.get("data_quality", 0.0)
             tp_count = weekly_data.get("tp_count", 0)
             
             # Quality scoring
-            # - FP rate: 5% is target, scale to 0-100
-            # - Data quality: want >50% feedback
-            # - TP count: want >10 TPs per week
+            # FP rate: 5% is target, scale to 0-100
+            # Data quality: want >50% feedback
+            # TP count: want >10 TPs per week
             
             quality_scores = []
             
@@ -263,17 +225,6 @@ class RetrainingService:
     
     @staticmethod
     def retrain_model(db: Session) -> dict:
-        """
-        Execute weekly retraining pipeline.
-        
-        Returns:
-            {
-                "status": "completed" | "rejected" | "error",
-                "reason": str,
-                "metrics": {...},
-                "next_retrain": datetime
-            }
-        """
         try:
             logger.info("=" * 80)
             logger.info("🔄 WEEKLY RETRAINING STARTING")
