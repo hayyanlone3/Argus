@@ -15,7 +15,7 @@ def init_db():
     global engine, SessionLocal
     
     try:
-        logger.info("🔌 Connecting to database...")
+        logger.info("  Connecting to database...")
         logger.info(f"   Database Type: {settings.database_type}")
         logger.info(f"   Database URL: {settings.database_url[:50]}...")
         
@@ -34,7 +34,7 @@ def init_db():
             conn.execute(text("SELECT 1"))
             conn.commit()
         
-        logger.info("✅ Database connection successful")
+        logger.info("  Database connection successful")
         
         # Create sessionmaker
         SessionLocal = sessionmaker(
@@ -44,7 +44,7 @@ def init_db():
         )
         
         # Create all tables
-        logger.info("📊 Creating database tables...")
+        logger.info("  Creating database tables...")
         from backend.database.models import Base, PolicyConfig
         Base.metadata.create_all(bind=engine)
         
@@ -62,7 +62,7 @@ def init_db():
                 )
                 session.add(policy)
                 session.commit()
-                logger.info("✅ Default PolicyConfig initialized")
+                logger.info("  Default PolicyConfig initialized")
             else:
                 # FORCE ENABLE for Demo
                 policy = session.query(PolicyConfig).filter_by(id=1).first()
@@ -70,19 +70,19 @@ def init_db():
                 policy.kill_on_alert = True
                 policy.quarantine_on_warn = True
                 session.commit()
-                logger.info("✅ PolicyConfig FORCE-ENABLED for demo")
+                logger.info("  PolicyConfig FORCE-ENABLED for demo")
         except Exception as e:
-            logger.error(f"❌ Error seeding default policy: {e}")
+            logger.error(f"  Error seeding default policy: {e}")
             session.rollback()
         finally:
             session.close()
         
-        logger.info("✅ All tables created successfully")
+        logger.info("  All tables created successfully")
         
         return engine
     
     except Exception as e:
-        logger.error(f"❌ Database initialization failed: {e}")
+        logger.error(f"  Database initialization failed: {e}")
         raise
 
 
@@ -97,4 +97,4 @@ def get_db() -> Session:
 def close_db():
     if engine:
         engine.dispose()
-        logger.info("✅ Database connection closed")
+        logger.info("  Database connection closed")

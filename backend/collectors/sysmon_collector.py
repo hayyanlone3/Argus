@@ -27,8 +27,6 @@ SYS_CHANNEL = "Microsoft-Windows-Sysmon/Operational"
 # Test channel on import (basic attempt)
 try:
     import win32evtlog
-    # Check if Microsoft-Windows-... exists, otherwise fallback to Sysmon/...
-    # Note: Full check happens in _run, just defined here.
 except:
     pass
 
@@ -68,19 +66,19 @@ class SysmonCollector:
 
     def start(self):
         if not self.enabled:
-            logger.warning("🟡 SysmonCollector disabled (non-Windows)")
+            logger.warning("SysmonCollector disabled (non-Windows)")
             return
         
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, name="SysmonCollector", daemon=True)
         self._thread.start()
-        logger.warning(f"🟢 SysmonCollector started (poll={self.poll_seconds}s)")
+        logger.warning(f"SysmonCollector started (poll={self.poll_seconds}s)")
 
     def stop(self):
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=5)
-        logger.warning("🛑 SysmonCollector stopped")
+        logger.warning("SysmonCollector stopped")
 
     def _run(self):
         query = f"*[System/Provider/@Name='{PROVIDER_NAME}']"
@@ -90,7 +88,7 @@ class SysmonCollector:
             try:
                 iterations += 1
                 if iterations % 10 == 0:
-                    logger.info("📡 Telemetry sensor heartbeat: Polling...")
+                    logger.info("Telemetry sensor heartbeat: Polling...")
 
                 flags = win32evtlog.EvtQueryReverseDirection
                 
@@ -118,7 +116,7 @@ class SysmonCollector:
                         if self._last_record_id is None:
                             # BOOTSTRAP: Look back 100 events to ensure we have context
                             self._last_record_id = rid - 100
-                            logger.warning(f"🎯 Telemetry sensor BOOTSTRAPPED with 100-event lookback at RID: {rid}")
+                            logger.warning(f"  Telemetry sensor BOOTSTRAPPED with 100-event lookback at RID: {rid}")
 
                         if rid <= self._last_record_id:
                             break
@@ -128,7 +126,7 @@ class SysmonCollector:
                         continue
 
                 if new_events:
-                    logger.warning(f"🔍 [COLLECTOR] Found {len(new_events)} NEW events!")
+                    logger.warning(f"[COLLECTOR] Found {len(new_events)} NEW events!")
                     self._last_record_id = int(new_events[0]["record_id"])
                     for p in reversed(new_events):
                         self._handle(p["event_id"], p["data"])
@@ -136,7 +134,7 @@ class SysmonCollector:
                 time.sleep(self.poll_seconds)
 
             except Exception as e:
-                logger.error(f"❌ SysmonCollector error: {e}")
+                logger.error(f"SysmonCollector error: {e}")
                 time.sleep(5)
 
     def _handle(self, event_id: int, data: Dict[str, Any]):
@@ -159,14 +157,14 @@ class SysmonCollector:
             proc_guid = data.get("ProcessGuid")
             parent_guid = data.get("ParentProcessGuid")
             
-            logger.warning(f"🟢 [SYSMON] PROCESS_CREATE: {image} ({pid})")
+            logger.warning(f"   [SYSMON] PROCESS_CREATE: {image} ({pid})")
             
             publish_event(TelemetryEvent(
                 event_id=new_event_id(),
                 ts=time.time(),
                 source="sysmon",
                 kind="PROCESS_CREATE",
-                # Use Sysmon GUID as correlation key when available
+                
                 session_id=str(proc_guid or f"pid-{pid}"),
                 child_pid=str(pid),
                 child_process=image,
@@ -186,7 +184,7 @@ class SysmonCollector:
             pid = data.get("ProcessId")
             proc_guid = data.get("ProcessGuid")
             
-            logger.warning(f"🔵 [SYSMON] FILE_CREATE: {path}")
+            logger.warning(f"[SYSMON] FILE_CREATE: {path}")
             
             publish_event(TelemetryEvent(
                 event_id=new_event_id(),
@@ -209,7 +207,7 @@ class SysmonCollector:
             pid = data.get("ProcessId")
             proc_guid = data.get("ProcessGuid")
             
-            logger.warning(f"🟡 [SYSMON] REG_SET: {key}")
+            logger.warning(f"[SYSMON] REG_SET: {key}")
             
             publish_event(TelemetryEvent(
                 event_id=new_event_id(),

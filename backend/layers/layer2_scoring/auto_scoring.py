@@ -143,7 +143,7 @@ class AutoScoringService:
         # HEURISTIC OVERRIDE: Filename pattern match
         if file_path and "malware" in file_path.lower():
             score = 1.0
-            logger.warning(f"🚨 HEURISTIC MATCH in AutoScoring for: {file_path}")
+            logger.warning(f"  HEURISTIC MATCH in AutoScoring for: {file_path}")
 
         sev = _severity_from_score(score)
 

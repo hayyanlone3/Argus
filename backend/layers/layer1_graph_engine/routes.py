@@ -62,7 +62,7 @@ async def create_node(
         node = GraphService.create_or_update_node(db, node_data)
         return NodeResponse.from_orm(node)
     except Exception as e:
-        logger.error(f"❌ Failed to create node: {e}")
+        logger.error(f"  Failed to create node: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -90,7 +90,7 @@ async def list_nodes(
             "nodes": [NodeResponse.from_orm(n) for n in nodes]
         }
     except Exception as e:
-        logger.error(f"❌ Failed to list nodes: {e}")
+        logger.error(f"  Failed to list nodes: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -115,7 +115,7 @@ async def get_node(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to get node: {e}")
+        logger.error(f"  Failed to get node: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -150,7 +150,7 @@ async def create_edge(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to create edge: {e}")
+        logger.error(f"  Failed to create edge: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -182,7 +182,7 @@ async def list_edges(
             "edges": [EdgeResponse.from_orm(e) for e in edges]
         }
     except Exception as e:
-        logger.error(f"❌ Failed to list edges: {e}")
+        logger.error(f"  Failed to list edges: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -224,7 +224,7 @@ async def list_interesting_edges(
             "edges": [EdgeResponse.from_orm(e) for e in interesting],
         }
     except Exception as e:
-        logger.error(f"❌ Failed to list interesting edges: {e}")
+        logger.error(f"  Failed to list interesting edges: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -249,7 +249,7 @@ async def get_edge(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to get edge: {e}")
+        logger.error(f"  Failed to get edge: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -269,7 +269,7 @@ async def get_neighbors(
         result = GraphService.get_node_neighbors(db, node_id, hops)
         return result
     except Exception as e:
-        logger.error(f"❌ Failed to get neighbors: {e}")
+        logger.error(f"  Failed to get neighbors: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -312,7 +312,7 @@ async def get_subgraph(
         }
 
     except Exception as e:
-        logger.error(f"❌ Failed to get subgraph: {e}")
+        logger.error(f"  Failed to get subgraph: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -348,7 +348,7 @@ async def get_path_to_root(
             "chain_length": len(path)
         }
     except Exception as e:
-        logger.error(f"❌ Failed to get path to root: {e}")
+        logger.error(f"  Failed to get path to root: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -364,7 +364,7 @@ async def get_graph_stats(db: Session = Depends(get_db)):
         stats = GraphService.get_graph_stats(db)
         return stats
     except Exception as e:
-        logger.error(f"❌ Failed to get stats: {e}")
+        logger.error(f"  Failed to get stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

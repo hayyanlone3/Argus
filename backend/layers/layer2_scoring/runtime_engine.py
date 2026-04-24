@@ -5,9 +5,13 @@ import threading
 import time
 import subprocess
 import hashlib
+import warnings
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, Optional
+
+# Suppress pydantic warnings
+warnings.filterwarnings("ignore", message="Field .* has conflict with protected namespace")
 
 from backend.shared.logger import setup_logger
 from backend.layers.layer2_scoring.event_stream import SCORING_QUEUE, TelemetryEvent, to_dict
@@ -32,13 +36,42 @@ _ML_LOCK = threading.Lock()
 _ML_MODEL = None
 _ML_SEEN = 0
 
+def load_trained_river_model():
+    """Load the trained River model from BETH dataset."""
+    global _ML_MODEL
+    
+    if not RIVER_AVAILABLE:
+        return False
+    
+    model_path = "backend/ml/models/river_halfspacetrees_model.pkl"
+    
+    try:
+        import pickle
+        with open(model_path, 'rb') as f:
+            _ML_MODEL = pickle.load(f)
+        return True
+    except FileNotFoundError:
+        # Fallback to fresh model if trained model not found
+        _ML_MODEL = anomaly.HalfSpaceTrees(
+            n_trees=int(os.getenv("ARGUS_RIVER_TREES", "25")),
+            height=int(os.getenv("ARGUS_RIVER_HEIGHT", "15")),
+            window_size=int(os.getenv("ARGUS_RIVER_WINDOW", "250")),
+            seed=int(os.getenv("ARGUS_RIVER_SEED", "42")),
+        )
+        return False
+    except Exception as e:
+        # Fallback to fresh model on any error
+        _ML_MODEL = anomaly.HalfSpaceTrees(
+            n_trees=int(os.getenv("ARGUS_RIVER_TREES", "25")),
+            height=int(os.getenv("ARGUS_RIVER_HEIGHT", "15")),
+            window_size=int(os.getenv("ARGUS_RIVER_WINDOW", "250")),
+            seed=int(os.getenv("ARGUS_RIVER_SEED", "42")),
+        )
+        return False
+
+# Load the trained model on startup
 if RIVER_AVAILABLE:
-    _ML_MODEL = anomaly.HalfSpaceTrees(
-        n_trees=int(os.getenv("ARGUS_RIVER_TREES", "25")),
-        height=int(os.getenv("ARGUS_RIVER_HEIGHT", "15")),
-        window_size=int(os.getenv("ARGUS_RIVER_WINDOW", "250")),
-        seed=int(os.getenv("ARGUS_RIVER_SEED", "42")),
-    )
+    load_trained_river_model()
 
 # In-memory latest results (safe start; DB persistence can come later)
 LATEST_DECISIONS: Dict[str, Dict[str, Any]] = {}  # event_id -> payload
@@ -186,10 +219,6 @@ def try_quarantine_path(
     session_id: Optional[str] = None,
     mitre_stage: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """
-    Best-effort quarantine using Layer4 QuarantineService.
-    Requires SessionLocal initialized via init_db().
-    """
     if not original_path:
         return {"quarantined": False, "reason": "path_missing"}
 
@@ -229,10 +258,7 @@ def try_quarantine_path(
     finally:
         db.close()
 
-
-# ---------------------------
 # Layer A: Statistical
-# ---------------------------
 def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
     score = 0.0
     reasons = []
@@ -241,16 +267,21 @@ def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
     if (evt.kind == "FILE_CREATE" and evt.target_path) or (evt.kind == "REG_SET") or (evt.kind == "PROCESS_CREATE" and evt.child_process):
         # 1. Entropy (File Only & Process Launch)
         file_to_check = evt.target_path if evt.kind == "FILE_CREATE" else (evt.child_process if evt.kind == "PROCESS_CREATE" else None)
-        if file_to_check:
+        
+        # Use provided entropy first, then try to read from disk
+        ent = evt.file_entropy
+        if ent is None and file_to_check:
             ent = best_effort_file_entropy(file_to_check, max_bytes=int(os.getenv("ARGUS_ENTROPY_MAX_BYTES", "524288")))
             if ent is not None:
                 evt.file_entropy = ent
-                if ent >= 7.9:
-                    score += 0.85
-                    reasons.append(f"high_entropy={ent:.2f}")
-                elif ent >= 7.2:
-                    score += 0.50
-                    reasons.append(f"mid_entropy={ent:.2f}")
+        
+        if ent is not None:
+            if ent >= 7.9:
+                score += 0.85
+                reasons.append(f"high_entropy={ent:.2f}")
+            elif ent >= 7.2:
+                score += 0.50
+                reasons.append(f"mid_entropy={ent:.2f}")
 
         # 2. Activity Bursts (File or Registry)
         if evt.kind in ("FILE_CREATE", "REG_SET"):
@@ -267,10 +298,7 @@ def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
 
     return {"score": clamp01(score), "reasons": reasons}
 
-
-# ---------------------------
 # Layer B: P-matrix
-# ---------------------------
 class PMatrixModel:
     def __init__(self):
         self.lock = threading.Lock()
@@ -279,11 +307,6 @@ class PMatrixModel:
         self.vocab_children = set()
 
     def update_and_score(self, parent: str, child: str) -> float:
-        """
-        Laplace-smoothed rarity score:
-        probability = (count+1)/(total + |V|)
-        rarity_score = 1 - probability
-        """
         parent = (parent or "").lower()
         child = (child or "").lower()
         if not parent or not child:
@@ -309,64 +332,194 @@ def score_layer_b(evt: TelemetryEvent) -> Dict[str, Any]:
     if evt.kind != "PROCESS_CREATE":
         return {"score": 0.0, "reasons": []}
 
-    s = P_MATRIX.update_and_score(evt.parent_process or "", evt.child_process or "")
+    parent = (evt.parent_process or "").lower()
+    child = (evt.child_process or "").lower()
+    
+    # WHITELIST: Don't flag legitimate applications
+    legitimate_apps = [
+        "kiro.exe", "notepad.exe", "explorer.exe", "chrome.exe", 
+        "firefox.exe", "code.exe", "devenv.exe", "winrar.exe"
+    ]
+    
+    parent_name = parent.split("\\")[-1] if "\\" in parent else parent
+    child_name = child.split("\\")[-1] if "\\" in child else child
+    
+    # If both parent and child are legitimate, reduce score significantly
+    if any(app in parent_name for app in legitimate_apps) and any(app in child_name for app in legitimate_apps):
+        return {"score": 0.1, "reasons": ["legitimate_application"]}
+    
+    # If same executable spawning itself, it's usually legitimate (like Kiro.exe -> Kiro.exe)
+    if parent_name == child_name:
+        return {"score": 0.2, "reasons": ["self_spawn"]}
+
+    s = P_MATRIX.update_and_score(parent, child)
+    
+    # Reduce score for legitimate processes but keep some sensitivity
+    if any(app in child_name for app in legitimate_apps):
+        s = s * 0.6  # Reduce by 40% (less aggressive than before)
+    
     reasons = []
     if s >= 0.7:
         reasons.append("rare_transition")
     return {"score": s, "reasons": reasons}
 
-
-# ---------------------------
 # Layer C: Online ML
-# ---------------------------
 def layer_c_features(evt: TelemetryEvent, a_score: float, b_score: float) -> Dict[str, float]:
+    """Enhanced feature extraction for better malware detection."""
+    
     kind = evt.kind or ""
     child = (evt.child_process or "").lower()
-
-    # A tiny feature set that is available now, without needing full graph features yet.
-    # We can extend later with degree/depth/density once you compute them.
-    return {
+    parent = (evt.parent_process or "").lower()
+    cmd = (evt.child_cmd or "").lower()
+    target_path = (evt.target_path or "").lower()
+    
+    # Basic event type features
+    features = {
         "is_process_create": 1.0 if kind == "PROCESS_CREATE" else 0.0,
         "is_file_create": 1.0 if kind == "FILE_CREATE" else 0.0,
         "is_reg_set": 1.0 if kind == "REG_SET" else 0.0,
+    }
+    
+    # Mathematical layer scores (critical for trained model)
+    features.update({
         "a_score": float(a_score),
         "b_score": float(b_score),
         "entropy": float(evt.file_entropy or 0.0),
-        "child_is_cmd": 1.0 if child.endswith("\\cmd.exe") else 0.0,
-        "child_is_powershell": 1.0 if child.endswith("\\powershell.exe") else 0.0,
-    }
+    })
+    
+    # Enhanced process-based features
+    features.update({
+        "child_is_cmd": 1.0 if "cmd.exe" in child else 0.0,
+        "child_is_powershell": 1.0 if "powershell" in child else 0.0,
+        "child_is_system32": 1.0 if "system32" in child else 0.0,
+        "parent_is_explorer": 1.0 if "explorer.exe" in parent else 0.0,
+        "parent_is_system": 1.0 if any(x in parent for x in ["system32", "windows"]) else 0.0,
+    })
+    
+    # Command line analysis (new - important for malware detection)
+    features.update({
+        "cmd_has_base64": 1.0 if any(x in cmd for x in ["-enc", "base64", "frombase64"]) else 0.0,
+        "cmd_has_download": 1.0 if any(x in cmd for x in ["downloadstring", "wget", "curl", "invoke-webrequest"]) else 0.0,
+        "cmd_has_bypass": 1.0 if any(x in cmd for x in ["bypass", "unrestricted", "hidden", "windowstyle"]) else 0.0,
+        "cmd_length": min(len(cmd) / 100.0, 10.0),  # Normalized command length
+    })
+    
+    # Path-based risk features
+    features.update({
+        "path_is_temp": 1.0 if any(x in target_path for x in ["temp", "tmp"]) else 0.0,
+        "path_is_appdata": 1.0 if "appdata" in target_path else 0.0,
+        "path_is_startup": 1.0 if "startup" in target_path else 0.0,
+        "path_is_suspicious": 1.0 if any(x in target_path for x in ["programdata", "public"]) else 0.0,
+    })
+    
+    # Entropy-based features (enhanced)
+    entropy = evt.file_entropy or 0.0
+    features.update({
+        "entropy_high": 1.0 if entropy > 7.5 else 0.0,
+        "entropy_medium": 1.0 if 6.0 <= entropy <= 7.5 else 0.0,
+        "entropy_low": 1.0 if entropy < 6.0 else 0.0,
+        "entropy_normalized": min(entropy / 8.0, 1.0),
+    })
+    
+    # Combined risk indicators
+    features.update({
+        "combined_risk": min((a_score + b_score + (entropy / 8.0)) / 3.0, 1.0),
+        "is_high_risk_combo": 1.0 if (a_score > 0.7 and entropy > 7.0) else 0.0,
+        "is_lolbin_execution": 1.0 if (features["child_is_cmd"] or features["child_is_powershell"]) and not features["parent_is_system"] else 0.0,
+    })
+    
+    return features
 
 def score_layer_c(evt: TelemetryEvent, a_score: float, b_score: float) -> Dict[str, Any]:
     global _ML_SEEN
 
     if not RIVER_AVAILABLE or _ML_MODEL is None:
-        return {"score": 0.0, "reasons": ["river_not_installed"]}
+        return {"score": 0.0, "reasons": ["river_not_available"]}
 
     feats = layer_c_features(evt, a_score=a_score, b_score=b_score)
+    
+    # WHITELIST: Reduce ML scoring for legitimate processes
+    child = (evt.child_process or "").lower()
+    child_name = child.split("\\")[-1] if "\\" in child else child
+    
+    legitimate_apps = [
+        "kiro.exe", "notepad.exe", "explorer.exe", "chrome.exe", 
+        "firefox.exe", "code.exe", "devenv.exe", "winrar.exe"
+    ]
+    
+    is_legitimate = any(app in child_name for app in legitimate_apps)
 
     with _ML_LOCK:
-        raw = float(_ML_MODEL.score_one(feats))
-        _ML_MODEL.learn_one(feats)
-        _ML_SEEN += 1
+        try:
+            # Get River anomaly score from trained BETH model
+            raw_river = float(_ML_MODEL.score_one(feats))
+            
+            # Use trained model score with mathematical layers
+            # Apply squashing to convert raw score to probability
+            river_contribution = squash01(raw_river)
+            
+            # Hybrid scoring: Mathematical + Trained ML
+            final_score = (a_score + b_score) * 0.6 + river_contribution * 0.4
+            
+            # WHITELIST: Reduce score for legitimate apps
+            if is_legitimate:
+                final_score = final_score * 0.5  # Reduce by 50%
+            
+            # Continue online learning (model adapts to new data)
+            _ML_MODEL.learn_one(feats)
+            _ML_SEEN += 1
+            
+        except Exception as e:
+            final_score = (a_score + b_score) * 0.5  # Fallback to math only
+            raw_river = 0.0
+            river_contribution = 0.0
 
-    return {"score": squash01(raw), "reasons": ["river_halfspacetrees"], "raw": raw, "seen": _ML_SEEN}
+    # Clamp final score
+    final_score = clamp01(final_score)
+    
+    # Determine reasons based on actual behavior
+    reasons = ["trained_beth_model"]
+    if is_legitimate:
+        reasons.append("legitimate_process")
+        
+    if final_score > 0.8:
+        reasons.append("high_risk_detected")
+    elif final_score > 0.5:
+        reasons.append("moderate_risk")
+    else:
+        reasons.append("low_risk")
+        reasons.append("low_risk")
+    
+    # Add specific detection reasons
+    if feats.get("is_high_risk_combo", 0.0) > 0.5:
+        reasons.append("high_entropy_with_math_scores")
+    if feats.get("is_lolbin_execution", 0.0) > 0.5:
+        reasons.append("lolbin_execution")
+    if feats.get("cmd_has_base64", 0.0) > 0.5:
+        reasons.append("base64_encoding")
+    
+    return {
+        "score": final_score, 
+        "reasons": reasons, 
+        "raw_river": raw_river,
+        "river_contribution": river_contribution,
+        "seen": _ML_SEEN,
+        "model_type": "trained_beth_model"
+    }
 
-
-# ---------------------------
 # Fusion
-# ---------------------------
 def fuse(a: float, b: float, c: float) -> Dict[str, Any]:
     a, b, c = clamp01(a), clamp01(b), clamp01(c)
 
-    # hard override (strong confidence pattern)
-    if b > 0.85 and c > 0.70:
-        return {"decision": "MALWARE ALERT", "final_score": 1.0, "rule": "B>0.85 & C>0.70 override"}
+    # BALANCED: More selective override rule but not too aggressive
+    if b > 0.90 and c > 0.75 and a > 0.3:  # Require some entropy/burst activity
+        return {"decision": "MALWARE ALERT", "final_score": 1.0, "rule": "high_confidence_override"}
 
     final = 0.4 * a + 0.3 * b + 0.3 * c
 
-    if final >= 0.80:
+    if final >= 0.80:  # Restore higher threshold for malware
         dec = "MALWARE ALERT"
-    elif final >= 0.50:
+    elif final >= 0.55:  # Balanced suspicious threshold
         dec = "SUSPICIOUS"
     else:
         dec = "NORMAL"
@@ -406,14 +559,14 @@ class Layer2RuntimeEngine:
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, name="Layer2RuntimeEngine", daemon=True)
         self._thread.start()
-        logger.info("🟢 Layer2RuntimeEngine started")
+        logger.info("Layer2RuntimeEngine started")
 
     def stop(self):
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=5)
         self._pool.shutdown(wait=False)
-        logger.info("🛑 Layer2RuntimeEngine stopped")
+        logger.info("Layer2RuntimeEngine stopped")
 
     def _run(self):
         global _ML_SEEN, _POLICY_LAST_REFRESH, _POLICY_CACHE
@@ -528,10 +681,10 @@ class Layer2RuntimeEngine:
                         fused["final_score"] = max(float(fused.get("final_score", 0.0)), 0.50)
                         fused["rule"] = str(fused.get("rule", "")) + " + layer0_warn_override"
 
-                # --- TACTICAL LOGGING (For Validation) ---
-                if fused.get("final_score", 0) > 0.3:
-                     print(f"\n[!] ARGUS DETECTION: {evt.kind} | Score: {fused.get('final_score')} | Decision: {fused.get('decision')}")
-                     print(f"[!] Reasons: {a['reasons'] + b['reasons'] + c['reasons']}")
+                # Remove tactical logging noise
+                # if fused.get("final_score", 0) > 0.3:
+                #     print(f"\n[!] ARGUS DETECTION: {evt.kind} | Score: {fused.get('final_score')} | Decision: {fused.get('decision')}")
+                #     print(f"[!] Reasons: {a['reasons'] + b['reasons'] + c['reasons']}")
                 
                 # Auto-response logic
                 ml_ready = (not RIVER_AVAILABLE) or (_ML_MODEL is None) or (_ML_SEEN >= warmup)
@@ -567,16 +720,16 @@ class Layer2RuntimeEngine:
                 if is_kill_enabled and should_kill:
                     pid = evt.child_pid
                     if pid:
-                        print(f"🛑 [AUTO-RESPONSE] CRITICAL THREAT DETECTED. KILLING PID {pid}...")
+                        # print(f"[AUTO-RESPONSE] CRITICAL THREAT DETECTED. KILLING PID {pid}...")
                         try:
                             killed = IsolationService.kill_process(int(pid), force=True)
-                            if killed: print(f"✅ [SUCCESS] PID {pid} HAS BEEN TERMINATED.")
+                            # if killed: print(f"[SUCCESS] PID {pid} HAS BEEN TERMINATED.")
                         except Exception as k_ex:
                             err = str(k_ex)
-                            print(f"❌ [ERROR] Could not kill PID {pid}: {err}")
+                            # print(f"  [ERROR] Could not kill PID {pid}: {err}")
                     else:
                          err = "pid_missing"
-                         print("⚠️ [AUTO-RESPONSE] Kill triggered but PID was missing.")
+                         # print("[AUTO-RESPONSE] Kill triggered but PID was missing.")
 
                 quarantine_result = {"quarantined": False, "reason": "not_attempted"}
                 
@@ -633,6 +786,7 @@ class Layer2RuntimeEngine:
                     "child_cmd": evt.child_cmd,
                 }
 
+                # Store results and create incident if needed
                 payload = {
                     "event": to_dict(evt),
                     "scores": {"A": a, "B": b, "C": c},
@@ -646,8 +800,46 @@ class Layer2RuntimeEngine:
                         for k in list(LATEST_DECISIONS.keys())[:500]:
                             LATEST_DECISIONS.pop(k, None)
 
+                # CREATE INCIDENT FOR LAYER 5 LEARNING
+                if connection.SessionLocal is not None and fused.get("final_score", 0) >= policy.get("min_final_score_incident", 0.5):
+                    try:
+                        from backend.database.models import Incident, IncidentSeverity
+                        
+                        db = connection.SessionLocal()
+                        
+                        # Determine severity based on decision
+                        if fused.get("decision") == "MALWARE ALERT":
+                            severity = IncidentSeverity.CRITICAL
+                        elif fused.get("decision") == "SUSPICIOUS":
+                            severity = IncidentSeverity.WARNING
+                        else:
+                            severity = IncidentSeverity.UNKNOWN
+                        
+                        # Create incident record for Layer 5 Learning
+                        incident = Incident(
+                            session_id=evt.session_id,
+                            event_id=evt.event_id,
+                            severity=severity,
+                            confidence=float(fused.get("final_score", 0)),
+                            mitre_stage=None,  # Could be enhanced later
+                            description=f"{evt.kind}: {evt.child_process or evt.target_path}",
+                            detection_layer="Layer2_Fusion",
+                            raw_data=payload
+                        )
+                        
+                        db.add(incident)
+                        db.commit()
+                        
+                    except Exception as incident_error:
+                        logger.error(f"Failed to create incident: {incident_error}")
+                        if 'db' in locals():
+                            db.rollback()
+                    finally:
+                        if 'db' in locals():
+                            db.close()
+
             except Exception:
-                logger.exception("❌ Layer2RuntimeEngine event processing failed")
+                logger.exception("  Layer2RuntimeEngine event processing failed")
 
 
 

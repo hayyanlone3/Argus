@@ -95,10 +95,7 @@ export default function Layer2Dashboard() {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-slate-900 text-xl font-semibold tracking-wide">
-              Layer 2 Live Scoring (Sysmon only)
-            </div>
-            <div className="text-slate-500 text-sm font-mono">
-              3-channel parallel scoring (A/B/C) + fusion decision {header}
+              Live Scoring
             </div>
           </div>
 

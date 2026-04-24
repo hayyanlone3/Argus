@@ -2,7 +2,6 @@ import sys
 import os
 from sqlalchemy import inspect, text
 
-# Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database.connection import engine, SessionLocal
@@ -25,7 +24,7 @@ def init_database():
         # Create all tables
         logger.info("Creating all tables...")
         from database.connection import init_db
-        init_db() # This sets the global engine and creates tables
+        init_db()
         logger.info("All tables created successfully")
         logger.info("")
         
@@ -60,10 +59,9 @@ def init_database():
 
 
 def verify_connection():
-    """Verify database connection works."""
     try:
         logger.info("")
-        logger.info("🔌 Testing database connection...")
+        logger.info("Testing database connection...")
         
         db = connection.SessionLocal()
         db.execute(text("SELECT 1"))

@@ -73,7 +73,7 @@ async def list_incidents(
         }
     
     except Exception as e:
-        logger.error(f"❌ Failed to list incidents: {e}")
+        logger.error(f"  Failed to list incidents: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -117,7 +117,7 @@ async def get_incident(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to get incident: {e}")
+        logger.error(f"  Failed to get incident: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -162,7 +162,7 @@ async def update_incident(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to update incident: {e}")
+        logger.error(f"  Failed to update incident: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -220,7 +220,7 @@ async def submit_feedback(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to submit feedback: {e}")
+        logger.error(f"  Failed to submit feedback: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -273,5 +273,5 @@ async def get_incident_stats(db: Session = Depends(get_db)):
         }
     
     except Exception as e:
-        logger.error(f"❌ Failed to get stats: {e}")
+        logger.error(f"  Failed to get stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))

@@ -1,9 +1,4 @@
 # backend/main.py
-"""
-ARGUS v2.2 - Provenance Graph Anomaly Detection System
-Main FastAPI application with 6-layer detection pipeline
-"""
-
 import sys
 import os
 from contextlib import asynccontextmanager
@@ -29,18 +24,15 @@ from backend.layers.layer2_scoring.runtime_engine import Layer2RuntimeEngine
 # Layer 1 Ingestion
 from backend.layers.layer1_graph_engine.ingestion import GraphIngestionWorker
 
+# ML Models
+from backend.ml.inference.model_loader import get_ml_loader
 
 from backend.collectors.sysmon_collector import SysmonCollector
 
 logger = setup_logger(__name__)
 
-# ═══════════════════════════════════════════════════════════════
-# LIFESPAN EVENTS
-# ═══════════════════════════════════════════════════════════════
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application startup and shutdown events"""
     from backend.layers.layer2_scoring.event_stream import SCORING_QUEUE, GRAPH_QUEUE, EVENT_QUEUE
     from queue import Empty
 
@@ -55,28 +47,29 @@ async def lifespan(app: FastAPI):
     # STARTUP
     try:
         logger.info("=" * 80)
-        logger.info("🚀 ARGUS v2.2 Backend Initializing...")
+        logger.info("ARGUS v2.2 Backend Initializing...")
         logger.info("=" * 80)
 
-        # Initialize database (must happen before collectors that use SessionLocal)
         init_db()
 
-        # ──────────────────────────────────────────────────────────
-        # START Layer 2 Runtime Engine
-        # ──────────────────────────────────────────────────────────
+        # Load ML models
+        logger.info("Loading ML models...")
+        ml_loader = get_ml_loader()
+        if ml_loader.is_loaded:
+            logger.info("  ML models loaded successfully")
+            logger.info(f"   Available models: {list(ml_loader.models.keys())}")
+            app.state.ml_loader = ml_loader
+        else:
+            logger.warning("   ML models not available (using fallback scoring)")
+            logger.warning("   To enable ML: Train models on Colab and copy .pkl files to backend/ml/models/")
+            app.state.ml_loader = None
+
         app.state.layer2_engine = Layer2RuntimeEngine()
         app.state.layer2_engine.start()
 
-        # ──────────────────────────────────────────────────────────
-        # START Layer 1 Graph Ingestion
-        # ──────────────────────────────────────────────────────────
         app.state.graph_worker = GraphIngestionWorker()
         app.state.graph_worker.start()
 
-
-        # ──────────────────────────────────────────────────────────
-        # Sysmon Collector
-        # ──────────────────────────────────────────────────────────
         sm_enabled = os.getenv("ARGUS_SYSMON_ENABLED", "true").lower() == "true"
         app.state.sysmon = SysmonCollector(
             enabled=sm_enabled,
@@ -86,24 +79,21 @@ async def lifespan(app: FastAPI):
         if sm_enabled:
             app.state.sysmon.start()
         else:
-            logger.info("⏭️ SysmonCollector disabled by ARGUS_SYSMON_ENABLED=false")
+            logger.info("SysmonCollector disabled by ARGUS_SYSMON_ENABLED=false")
 
-        # ──────────────────────────────────────────────────────────
-        # Layer 5: Learning Scheduler (weekly retraining)
-        # ──────────────────────────────────────────────────────────
         try:
             from backend.layers.layer5_learning.scheduler import LearningScheduler
             LearningScheduler.init_scheduler()
         except Exception as sched_err:
-            logger.warning(f"⚠️ Learning scheduler init failed (non-fatal): {sched_err}")
+            logger.warning(f"Learning scheduler init failed (non-fatal): {sched_err}")
 
-        logger.info("✅ Database initialized successfully")
-        logger.info("✅ API running on 0.0.0.0:8000")
-        logger.info("✅ Debug mode: True")
+        logger.info("Database initialized successfully")
+        logger.info("API running on 0.0.0.0:8000")
+        logger.info("Debug mode: True")
         logger.info("=" * 80)
 
     except Exception as e:
-        logger.error(f"❌ Startup failed: {e}")
+        logger.error(f"Startup failed: {e}")
         sys.exit(1)
 
     yield
@@ -114,27 +104,22 @@ async def lifespan(app: FastAPI):
         if e:
             e.stop()
     except Exception as ex:
-        logger.error(f"❌ Failed to stop layer2 engine cleanly: {ex}")
+        logger.error(f"Failed to stop layer2 engine cleanly: {ex}")
     try:
         gw = getattr(app.state, "graph_worker", None)
         if gw:
             gw.stop()
     except Exception as ex:
-        logger.error(f"❌ Failed to stop graph worker cleanly: {ex}")
+        logger.error(f"Failed to stop graph worker cleanly: {ex}")
 
     try:
         sm = getattr(app.state, "sysmon", None)
         if sm:
             sm.stop()
     except Exception as e:
-        logger.error(f"❌ Failed to stop sysmon cleanly: {e}")
+        logger.error(f"Failed to stop sysmon cleanly: {e}")
 
-    logger.info("🛑 ARGUS Backend shutting down...")
-
-
-# ═══════════════════════════════════════════════════════════════
-# FASTAPI APP
-# ═══════════════════════════════════════════════════════════════
+    logger.info("ARGUS Backend shutting down...")
 
 app = FastAPI(
     title="ARGUS v2.2",
@@ -146,21 +131,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# ═══════════════════════════════════════════════════════════════
-# CORS MIDDLEWARE
-# ═══════════════════════════════════════════════════════════════
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],  # React dev servers
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# ═══════════════════════════════════════════════════════════════
-# ROOT ENDPOINT
-# ═══════════════════════════════════════════════════════════════
 
 @app.get("/health")
 async def health():
@@ -172,10 +149,6 @@ async def health():
         "database": "connected",
         "api_url": "http://0.0.0.0:8000",
     }
-
-# ═══════════════════════════════════════════════════════════════
-# INCLUDE ALL LAYER ROUTERS
-# ═══════════════════════════════════════════════════════════════
 
 # Layer 0: Bouncer
 app.include_router(layer0_router, prefix="/api/layer0", tags=["Layer 0: Bouncer"])
@@ -198,10 +171,6 @@ app.include_router(layer5_router, prefix="/api/layer5", tags=["Layer 5: Learning
 # Policy Configuration
 app.include_router(policy_router)
 
-# ═══════════════════════════════════════════════════════════════
-# ERROR HANDLERS
-# ═══════════════════════════════════════════════════════════════
-
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc):
     """Handle 404 errors"""
@@ -216,8 +185,7 @@ async def not_found_handler(request: Request, exc):
 
 @app.exception_handler(500)
 async def server_error_handler(request: Request, exc):
-    """Handle 500 errors"""
-    logger.error(f"❌ Server error: {exc}")
+    logger.error(f"Server error: {exc}")
     return JSONResponse(
         status_code=500,
         content={
@@ -227,15 +195,7 @@ async def server_error_handler(request: Request, exc):
         },
     )
 
-# ═══════════════════════════════════════════════════════════════
-# STARTUP LOG (local dev convenience)
-# ═══════════════════════════════════════════════════════════════
-
 if __name__ == "__main__":
-    # Run from repository root so `backend` is importable. Prefer:
-    #   python run_argus.py
-    # or:
-    #   uvicorn backend.main:app --host 127.0.0.1 --port 8000
     import pathlib
 
     root = pathlib.Path(__file__).resolve().parents[1]

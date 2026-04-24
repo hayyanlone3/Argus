@@ -95,7 +95,7 @@ class GraphService:
             return new_node
 
         except Exception as e:
-            logger.error(f"❌ Failed to create/update node: {e}")
+            logger.error(f"  Failed to create/update node: {e}")
             db.rollback()
             raise
 
@@ -121,7 +121,7 @@ class GraphService:
                     max_file_bytes=max_mb * 1024 * 1024,
                 )
             except Exception:
-                logger.exception(f"❌ Auto scoring failed for edge_id={new_edge.id}")
+                logger.exception(f"  Auto scoring failed for edge_id={new_edge.id}")
 
             # After auto-scoring, refresh so severity/score are included
             try:
@@ -134,7 +134,7 @@ class GraphService:
                 # Trigger for all edges so even harmless simulation telemetry becomes an incident
                 CorrelatorService.upsert_incident_for_session(db, new_edge.session_id)
             except Exception:
-                logger.exception("❌ Layer3 auto-incident creation failed")
+                logger.exception("  Layer3 auto-incident creation failed")
 
             # SSE publish (best-effort)
             try:
@@ -169,7 +169,7 @@ class GraphService:
             return new_edge
 
         except Exception as e:
-            logger.error(f"❌ Failed to create edge: {e}")
+            logger.error(f"  Failed to create edge: {e}")
             db.rollback()
             raise
     
@@ -190,7 +190,7 @@ class GraphService:
         
         cutoff_time = datetime.utcnow() - timedelta(hours=hours)
         edges = db.query(Edge).filter(Edge.timestamp >= cutoff_time).all()
-        logger.debug(f"📊 Found {len(edges)} active edges in last {hours}h")
+        logger.debug(f"  Found {len(edges)} active edges in last {hours}h")
         return edges
     
     @staticmethod
@@ -241,7 +241,7 @@ class GraphService:
             }
         
         except Exception as e:
-            logger.error(f"❌ Failed to get neighbors: {e}")
+            logger.error(f"  Failed to get neighbors: {e}")
             return {"node_id": node_id, "neighbors": []}
     
     @staticmethod
@@ -280,7 +280,7 @@ class GraphService:
             return path
         
         except Exception as e:
-            logger.error(f"❌ Failed to get node path: {e}")
+            logger.error(f"  Failed to get node path: {e}")
             return [node_id]
     
     @staticmethod
@@ -331,5 +331,5 @@ class GraphService:
             }
         
         except Exception as e:
-            logger.error(f"❌ Failed to get graph stats: {e}")
+            logger.error(f"  Failed to get graph stats: {e}")
             return {}

@@ -53,7 +53,7 @@ def publish_event(evt: TelemetryEvent) -> None:
         SCORING_QUEUE.put_nowait(evt)
         GRAPH_QUEUE.put_nowait(evt)
     except Exception as e:
-        print(f"❌ [EVENT_STREAM] Failed to publish: {e}")
+        print(f"  [EVENT_STREAM] Failed to publish: {e}")
 
 def to_dict(evt: TelemetryEvent) -> Dict[str, Any]:
     return asdict(evt)

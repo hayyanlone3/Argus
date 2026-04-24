@@ -23,7 +23,7 @@ if not exist "%PSQL_PATH%" (
 
 REM Check if psql exists
 if not exist "%PSQL_PATH%" (
-    echo ❌ PostgreSQL not found on D: drive
+    echo   PostgreSQL not found on D: drive
     echo.
     echo Expected location: D:\PostgreSQL\XX\bin\psql.exe
     echo.
@@ -36,7 +36,7 @@ if not exist "%PSQL_PATH%" (
     exit /b 1
 )
 
-echo ✅ PostgreSQL found at: %PSQL_PATH%
+echo   PostgreSQL found at: %PSQL_PATH%
 echo.
 
 REM Get postgres password (default is often blank or 'postgres')
@@ -60,7 +60,7 @@ echo.
 REM Test connection first
 %PSQL_CMD% -c "SELECT 1;" >nul 2>&1
 if %errorlevel% neq 0 (
-    echo ❌ Cannot connect to PostgreSQL
+    echo   Cannot connect to PostgreSQL
     echo.
     echo Possible reasons:
     echo 1. PostgreSQL service is not running
@@ -83,7 +83,7 @@ echo Creating user 'argus'...
 %PSQL_CMD% -c "CREATE USER argus WITH PASSWORD 'password123';" >nul 2>&1
 
 if %errorlevel% neq 0 (
-    echo ⚠️  User creation issue (may already exist)
+    echo    User creation issue (may already exist)
 )
 
 REM Create database
@@ -92,7 +92,7 @@ echo Creating database 'argus_db'...
 %PSQL_CMD% -c "CREATE DATABASE argus_db OWNER argus;" >nul 2>&1
 
 if %errorlevel% neq 0 (
-    echo ❌ Database creation failed
+    echo   Database creation failed
     pause
     exit /b 1
 )
@@ -103,7 +103,7 @@ echo Granting privileges...
 
 echo.
 echo ════════════════════════════════════════════════════════════════════════════
-echo ✅ PostgreSQL SETUP COMPLETE
+echo   PostgreSQL SETUP COMPLETE
 echo ════════════════════════════════════════════════════════════════════════════
 echo.
 echo Connection Details:

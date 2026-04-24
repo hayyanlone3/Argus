@@ -57,7 +57,7 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = False
         # IMPORTANT: Allow extra fields from .env (like SERVICE_NAME)
-        extra = "ignore"  # Ignore unknown variables in .env
+        extra = "ignore"
 
 
 # Load settings from .env

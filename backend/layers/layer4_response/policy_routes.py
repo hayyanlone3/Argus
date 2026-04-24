@@ -35,5 +35,5 @@ def update_policy(payload: PolicyConfigUpdate, db: Session = Depends(get_db)):
     
     db.commit()
     db.refresh(policy)
-    logger.info(f"✅ Policy persisted: auto_response={policy.auto_response_enabled}, kill={policy.kill_on_alert}")
+    logger.info(f"  Policy persisted: auto_response={policy.auto_response_enabled}, kill={policy.kill_on_alert}")
     return policy

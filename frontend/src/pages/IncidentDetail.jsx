@@ -32,9 +32,9 @@ export default function IncidentDetail() {
       setActing(true);
       await incidentService.updateStatus(sessionId, 'ACKNOWLEDGED');
       fetchIncident();
-      alert("✅ Incident Acknowledged");
+      alert("  Incident Acknowledged");
     } catch (err) {
-      alert("❌ Failed to acknowledge: " + err.message);
+      alert("  Failed to acknowledge: " + err.message);
     } finally {
       setActing(false);
     }
@@ -48,7 +48,7 @@ export default function IncidentDetail() {
         .find(v => v && String(v).match(/^\d+$/)) || null;
 
     if (!pid) {
-      alert("⚠️ No traceable process ID found for termination.");
+      alert("  No traceable process ID found for termination.");
       return;
     }
 
@@ -57,10 +57,10 @@ export default function IncidentDetail() {
     try {
       setActing(true);
       await incidentService.terminateProcess(pid);
-      alert(`✅ PID ${pid} Terminated.`);
+      alert(`  PID ${pid} Terminated.`);
       fetchIncident();
     } catch (err) {
-       alert("❌ Termination failed: " + err.message);
+       alert("  Termination failed: " + err.message);
     } finally {
        setActing(false);
     }

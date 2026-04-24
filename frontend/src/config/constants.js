@@ -159,10 +159,10 @@ export const INCIDENT_STATUSES = [
 ];
 
 export const INCIDENT_STATUS_ICONS = {
-  OPEN: '🔴',
-  ACKNOWLEDGED: '🟡',
-  FP: '✅',
-  TP: '⚠️',
+  OPEN: ' ',
+  ACKNOWLEDGED: ' ',
+  FP: ' ',
+  TP: ' ',
   RESOLVED: '✔️',
 };
 
@@ -179,8 +179,8 @@ export const INCIDENT_STATUS_COLORS = {
 // ═══════════════════════════════════════════════════════════════
 
 export const FEEDBACK_TYPES = {
-  TP: { label: 'True Positive', color: 'text-red-600', icon: '⚠️' },
-  FP: { label: 'False Positive', color: 'text-green-600', icon: '✅' },
+  TP: { label: 'True Positive', color: 'text-red-600', icon: ' ' },
+  FP: { label: 'False Positive', color: 'text-green-600', icon: ' ' },
   UNKNOWN: { label: 'Unknown', color: 'text-unknown', icon: '❓' },
 };
 
@@ -194,14 +194,14 @@ export const WHITELIST_TIERS = {
     description: 'Path-only matching (lowest false positives)',
     color: 'border-green-500',
     bg: 'bg-green-50',
-    icon: '🟢',
+    icon: ' ',
   },
   2: {
     name: 'Tier 2: Path + Hash',
     description: 'Path AND hash match required (version-controlled)',
     color: 'border-blue-500',
     bg: 'bg-blue-50',
-    icon: '🔵',
+    icon: ' ',
   },
   3: {
     name: 'Tier 3: Hash Only',

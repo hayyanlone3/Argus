@@ -22,7 +22,7 @@ export default function RetrainingLog() {
 
   return (
     <div className="space-y-4">
-      {error && <p className="text-red-600 text-sm mb-4 font-medium flex items-center gap-2">⚠️ {error}</p>}
+      {error && <p className="text-red-600 text-sm mb-4 font-medium flex items-center gap-2">  {error}</p>}
 
       {result && (
         <div className={`p-4 rounded-lg border mb-3 ${

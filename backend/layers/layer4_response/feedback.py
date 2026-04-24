@@ -58,7 +58,7 @@ class FeedbackService:
             return feedback
         
         except Exception as e:
-            logger.error(f"❌ Failed to submit feedback: {e}")
+            logger.error(f"  Failed to submit feedback: {e}")
             db.rollback()
             raise
     
@@ -95,5 +95,5 @@ class FeedbackService:
             }
         
         except Exception as e:
-            logger.error(f"❌ Failed to get feedback stats: {e}")
+            logger.error(f"  Failed to get feedback stats: {e}")
             return {}

@@ -6,7 +6,7 @@ Detects anomalous process chains on Windows using **online machine learning** an
 
 ---
 
-## 📊 Quick Stats
+##   Quick Stats
 
 - **6 Detection Layers** (Bouncer → Graph → Scoring → Correlation → Response → Learning)
 - **5 Node Types** (Process, File, Script, WMI, Registry)
@@ -22,7 +22,7 @@ Detects anomalous process chains on Windows using **online machine learning** an
 ### **Step 1: Install Python 3.11+**
 ```
 Download: https://www.python.org/downloads/
-✅ CHECK: "Add Python to PATH"
+  CHECK: "Add Python to PATH"
 Verify in new CMD: python --version
 ```
 
@@ -31,7 +31,7 @@ Verify in new CMD: python --version
 Download: https://www.postgresql.org/download/windows/
 Set superuser password: password123
 Port: 5432 (default)
-✅ CHECK: Stack Builder (for pgAdmin)
+  CHECK: Stack Builder (for pgAdmin)
 ```
 
 ### **Step 3: Clone Repository**
@@ -118,7 +118,7 @@ argus-project/
 
 ---
 
-## 🔌 API Endpoints
+##   API Endpoints
 
 All endpoints are fully documented at: **http://localhost:8000/docs**
 
@@ -177,7 +177,7 @@ POST /api/layer5/retrain              # Trigger retraining
 
 ---
 
-## 💾 Database Schema
+##   Database Schema
 
 ### **Nodes** (5 types)
 ```sql
@@ -282,12 +282,12 @@ curl "http://localhost:8000/api/layer3/incidents"
 
 ---
 
-## 🔍 Troubleshooting
+##   Troubleshooting
 
 ### **Python not found**
 ```
 1. Download from https://www.python.org/downloads/
-2. Run installer with "Add Python to PATH" ✅
+2. Run installer with "Add Python to PATH"  
 3. Restart CMD
 4. Run: python --version
 ```
@@ -420,9 +420,9 @@ For issues, questions, or suggestions:
 
 ---
 
-## 🎯 Roadmap
+##   Roadmap
 
-- [x] Phase 1: Core backend + database ✅
+- [x] Phase 1: Core backend + database  
 - [ ] Phase 2: Layer 0-5 complete implementation
 - [ ] Phase 3: ETW collectors (kernel, threat intel, AMSI, registry, WMI)
 - [ ] Phase 4: Frontend dashboards (7 dashboards)

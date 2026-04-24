@@ -45,14 +45,14 @@ def calculate_shannon_entropy(file_path: str) -> float:
         # Shannon entropy: -sum(p * log2(p))
         shannon = entropy(byte_probs, base=2)
         
-        logger.debug(f"📊 Entropy of {Path(file_path).name}: {shannon:.2f}")
+        logger.debug(f"  Entropy of {Path(file_path).name}: {shannon:.2f}")
         return float(shannon)
     
     except FileNotFoundError:
-        logger.debug(f"ℹ️ File vanished before reading (common for temp files): {file_path}")
+        logger.debug(f"  File vanished before reading (common for temp files): {file_path}")
         return 0.0
     except Exception as e:
-        logger.error(f"❌ Failed to calculate entropy: {e}")
+        logger.error(f"  Failed to calculate entropy: {e}")
         return 0.0
 
 
@@ -78,10 +78,10 @@ def calculate_file_hash(file_path: str) -> str:
         logger.debug(f"🔑 Hash of {Path(file_path).name}: {file_hash[:16]}...")
         return file_hash
     except FileNotFoundError:
-        logger.debug(f"ℹ️ File vanished before hashing (common for temp files): {file_path}")
+        logger.debug(f"  File vanished before hashing (common for temp files): {file_path}")
         return ""
     except Exception as e:
-        logger.error(f"❌ Failed to calculate hash: {e}")
+        logger.error(f"  Failed to calculate hash: {e}")
         return ""
 
 
@@ -117,11 +117,11 @@ def calculate_sample_entropy(file_path: str, sample_size_mb: int = 1) -> float:
         byte_probs = byte_counts / len(sample_data)
         shannon = entropy(byte_probs, base=2)
         
-        logger.debug(f"📊 Sample entropy ({sample_size_mb}MB) of {Path(file_path).name}: {shannon:.2f}")
+        logger.debug(f"  Sample entropy ({sample_size_mb}MB) of {Path(file_path).name}: {shannon:.2f}")
         return float(shannon)
     
     except Exception as e:
-        logger.error(f"❌ Failed to calculate sample entropy: {e}")
+        logger.error(f"  Failed to calculate sample entropy: {e}")
         return 0.0
 
 
@@ -162,17 +162,17 @@ def check_digital_signature(file_path: str) -> bool:
         is_microsoft = 'MICROSOFT_SIGNED' in result.stdout
         
         if is_microsoft:
-            logger.debug(f"🔐 {Path(file_path).name}: Microsoft-signed ✅")
+            logger.debug(f"🔐 {Path(file_path).name}: Microsoft-signed  ")
         else:
             logger.debug(f"🔐 {Path(file_path).name}: Not Microsoft-signed")
         
         return is_microsoft
     
     except subprocess.TimeoutExpired:
-        logger.warning(f"⚠️  Signature check timeout: {file_path}")
+        logger.warning(f"   Signature check timeout: {file_path}")
         return False
     except Exception as e:
-        logger.warning(f"⚠️  Could not verify signature: {e}")
+        logger.warning(f"   Could not verify signature: {e}")
         return False
 
 
@@ -200,7 +200,7 @@ def is_known_packer(file_path: str) -> bool:
         return False
     
     except Exception as e:
-        logger.warning(f"⚠️  Could not check packer: {e}")
+        logger.warning(f"   Could not check packer: {e}")
         return False
 
 
@@ -219,7 +219,7 @@ def get_file_code_section_entropy(file_path: str) -> float:
         try:
             import pefile
         except ImportError:
-            logger.debug("⚠️  pefile not installed, skipping code section analysis")
+            logger.debug("   pefile not installed, skipping code section analysis")
             return 0.0
         
         pe = pefile.PE(file_path)
@@ -236,11 +236,11 @@ def get_file_code_section_entropy(file_path: str) -> float:
                 byte_probs = byte_counts / len(section_data)
                 code_entropy = entropy(byte_probs, base=2)
                 
-                logger.debug(f"📊 Code section entropy: {code_entropy:.2f}")
+                logger.debug(f"  Code section entropy: {code_entropy:.2f}")
                 return float(code_entropy)
         
         return 0.0
     
     except Exception as e:
-        logger.debug(f"⚠️  Could not extract code section: {e}")
-        return 0.0
+        logger.debug(f"   Could not extract code section: {e}")
+        return 0.0

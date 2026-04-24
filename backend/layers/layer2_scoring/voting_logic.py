@@ -59,37 +59,37 @@ class VotingEngine:
         
         # CRITICAL: Injection detected (instant)
         if has_injection:
-            logger.warning("🔴 CRITICAL: Code injection detected")
+            logger.warning("  CRITICAL: Code injection detected")
             return Severity.CRITICAL
         
         # CRITICAL: AMSI disabled (instant)
         if has_amsi_disable:
-            logger.warning("🔴 CRITICAL: AMSI disabled (tampering)")
+            logger.warning("  CRITICAL: AMSI disabled (tampering)")
             return Severity.CRITICAL
         
         # CRITICAL: Math AND ML high
         if score_2a > DECISION_CRITICAL_MATH_ML[0] and score_2c > DECISION_CRITICAL_MATH_ML[1]:
-            logger.warning(f"🔴 CRITICAL: 2A={score_2a:.2f} AND 2C={score_2c:.2f} both high")
+            logger.warning(f"  CRITICAL: 2A={score_2a:.2f} AND 2C={score_2c:.2f} both high")
             return Severity.CRITICAL
         
         # CRITICAL: (Math OR Stats) AND ML high
         if (score_2a > DECISION_CRITICAL_STAT_ML[0] or score_2b > DECISION_CRITICAL_STAT_ML[0]) and score_2c > DECISION_CRITICAL_STAT_ML[1]:
-            logger.warning(f"🔴 CRITICAL: (2A={score_2a:.2f} OR 2B={score_2b:.2f}) AND 2C={score_2c:.2f}")
+            logger.warning(f"  CRITICAL: (2A={score_2a:.2f} OR 2B={score_2b:.2f}) AND 2C={score_2c:.2f}")
             return Severity.CRITICAL
         
         # WARNING: Math signal alone
         if score_2a > DECISION_WARNING_MATH:
-            logger.warning(f"🟡 WARNING: Math signal alone (2A={score_2a:.2f})")
+            logger.warning(f"  WARNING: Math signal alone (2A={score_2a:.2f})")
             return Severity.WARNING
         
         # WARNING: Stats signal alone
         if score_2b > DECISION_WARNING_STAT:
-            logger.warning(f"🟡 WARNING: Stats signal alone (2B={score_2b:.2f})")
+            logger.warning(f"  WARNING: Stats signal alone (2B={score_2b:.2f})")
             return Severity.WARNING
         
         # WARNING: ML high alone
         if score_2c > DECISION_WARNING_ML:
-            logger.warning(f"🟡 WARNING: ML signal alone (2C={score_2c:.2f})")
+            logger.warning(f"  WARNING: ML signal alone (2C={score_2c:.2f})")
             return Severity.WARNING
         
         # UNKNOWN: Multiple moderate signals
@@ -107,7 +107,7 @@ class VotingEngine:
             return Severity.UNKNOWN
         
         # BENIGN: No signals
-        logger.info("🟢 BENIGN: No anomaly detected")
+        logger.info("   BENIGN: No anomaly detected")
         return Severity.BENIGN
     
     @staticmethod
@@ -130,9 +130,9 @@ class VotingEngine:
             if signals >= 2:
                 confidence = min(confidence * 1.2, 1.0)  # +20% if 2+ channels agree
             
-            logger.debug(f"📊 Confidence: {confidence:.2f}")
+            logger.debug(f"  Confidence: {confidence:.2f}")
             return confidence
         
         except Exception as e:
-            logger.error(f"❌ Failed to calculate confidence: {e}")
+            logger.error(f"  Failed to calculate confidence: {e}")
             return 0.0

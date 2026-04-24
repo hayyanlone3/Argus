@@ -58,12 +58,12 @@ class QuarantineService:
             # Move file
             try:
                 shutil.move(file_path, str(quarantine_path))
-                logger.info(f"✅ File moved: {file_path} → {quarantine_path}")
+                logger.info(f"  File moved: {file_path} → {quarantine_path}")
             except PermissionError:
-                logger.error(f"❌ Permission denied: cannot quarantine {file_path}")
+                logger.error(f"  Permission denied: cannot quarantine {file_path}")
                 raise ValidationError(f"Cannot quarantine file (permission denied): {file_path}")
             except Exception as e:
-                logger.error(f"❌ Failed to move file: {e}")
+                logger.error(f"  Failed to move file: {e}")
                 raise ValidationError(f"Failed to quarantine file: {e}")
             
             # Store in database
@@ -83,13 +83,13 @@ class QuarantineService:
             db.commit()
             db.refresh(quarantine)
             
-            logger.info(f"✅ Quarantine record created: {quarantine.id}")
+            logger.info(f"  Quarantine record created: {quarantine.id}")
             return quarantine
         
         except ValidationError:
             raise
         except Exception as e:
-            logger.error(f"❌ Quarantine failed: {e}")
+            logger.error(f"  Quarantine failed: {e}")
             db.rollback()
             raise DatabaseError(f"Failed to quarantine file: {e}")
     
@@ -130,13 +130,13 @@ class QuarantineService:
                     target_dir.mkdir(parents=True, exist_ok=True)
                     
                     shutil.move(quarantine.quarantine_path, quarantine.original_path)
-                    logger.info(f"✅ File restored: {quarantine.original_path}")
+                    logger.info(f"  File restored: {quarantine.original_path}")
                 except PermissionError:
                     raise ValidationError(f"Cannot restore: permission denied")
                 except Exception as e:
                     raise ValidationError(f"Failed to restore: {e}")
             else:
-                logger.warning(f"⚠️  Quarantined file not found: {quarantine.quarantine_path}")
+                logger.warning(f"   Quarantined file not found: {quarantine.quarantine_path}")
             
             # Update database
             quarantine.status = "RESTORED"
@@ -146,13 +146,13 @@ class QuarantineService:
             db.commit()
             db.refresh(quarantine)
             
-            logger.info(f"✅ Restore completed: {quarantine_id}")
+            logger.info(f"  Restore completed: {quarantine_id}")
             return quarantine
         
         except ValidationError:
             raise
         except Exception as e:
-            logger.error(f"❌ Restore failed: {e}")
+            logger.error(f"  Restore failed: {e}")
             db.rollback()
             raise DatabaseError(f"Failed to restore file: {e}")
     
@@ -184,7 +184,7 @@ class QuarantineService:
             }
         
         except Exception as e:
-            logger.error(f"❌ Failed to list quarantine: {e}")
+            logger.error(f"  Failed to list quarantine: {e}")
             return {"total": 0, "quarantined": []}
     
     @staticmethod
@@ -229,5 +229,5 @@ class QuarantineService:
             }
         
         except Exception as e:
-            logger.error(f"❌ Failed to get quarantine stats: {e}")
+            logger.error(f"  Failed to get quarantine stats: {e}")
             return {}

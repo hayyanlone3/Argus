@@ -117,7 +117,7 @@ export default function Dashboard() {
 
         {error && (
           <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 flex items-center gap-3 text-red-800 text-sm font-medium shadow-sm">
-            <span className="text-red-500 text-lg">⚠️</span>
+            <span className="text-red-500 text-lg"> </span>
             {error}
           </div>
         )}

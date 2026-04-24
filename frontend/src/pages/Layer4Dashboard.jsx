@@ -75,7 +75,7 @@ export default function Layer4Dashboard() {
         }
       })
       .catch(err => {
-        console.error("❌ Policy Fetch Failed. Using local defaults.", err);
+        console.error("  Policy Fetch Failed. Using local defaults.", err);
       })
       .finally(() => setPolicyLoading(false));
   }, []);

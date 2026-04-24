@@ -35,7 +35,7 @@ def cache_result(ttl_seconds: int = 300) -> Callable:
             if key in cache:
                 cached_time = cache_times.get(key, 0)
                 if current_time - cached_time < ttl_seconds:
-                    logger.debug(f"💾 Cache hit: {func.__name__}")
+                    logger.debug(f"  Cache hit: {func.__name__}")
                     return cache[key]
             
             result = func(*args, **kwargs)
@@ -57,9 +57,9 @@ def retry_on_failure(max_retries: int = 3, delay_seconds: float = 1.0) -> Callab
                     return func(*args, **kwargs)
                 except Exception as e:
                     if attempt == max_retries - 1:
-                        logger.error(f"❌ {func.__name__} failed after {max_retries} attempts: {e}")
+                        logger.error(f"  {func.__name__} failed after {max_retries} attempts: {e}")
                         raise
-                    logger.warning(f"⚠️  {func.__name__} attempt {attempt + 1} failed, retrying in {delay_seconds}s...")
+                    logger.warning(f"   {func.__name__} attempt {attempt + 1} failed, retrying in {delay_seconds}s...")
                     time.sleep(delay_seconds)
         
         return wrapper
@@ -76,6 +76,6 @@ def log_entry_exit(func: Callable) -> Callable:
             logger.debug(f"⬅️  Exiting {func.__name__}")
             return result
         except Exception as e:
-            logger.error(f"❌ Error in {func.__name__}: {e}")
+            logger.error(f"  Error in {func.__name__}: {e}")
             raise
     return wrapper

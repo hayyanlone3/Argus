@@ -51,5 +51,5 @@ if __name__ == "__main__":
         print("\n")
         
     except Exception as e:
-        logger.error(f"❌ Initialization failed: {e}")
+        logger.error(f"  Initialization failed: {e}")
         sys.exit(1)

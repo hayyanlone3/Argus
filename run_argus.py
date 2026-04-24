@@ -1,19 +1,3 @@
-"""
-Start the Argus FastAPI backend.
-
-Use this instead of `uvicorn ...` when port 8000 is often already taken: we verify
-the port is free *before* starting uvicorn, so background workers are not started and
-then torn down on Windows Errno 10048.
-
-From repository root:
-
-  python run_argus.py
-
-Or with a free port:
-
-  set ARGUS_PORT=8001
-  python run_argus.py
-"""
 from __future__ import annotations
 
 import os

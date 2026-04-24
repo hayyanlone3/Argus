@@ -1,8 +1,3 @@
-"""
-Layer 0: Bouncer API Endpoints
-Provides fast-path file analysis endpoints
-"""
-
 from fastapi import APIRouter, Depends, HTTPException, File, UploadFile
 from sqlalchemy.orm import Session
 from backend.database.connection import get_db
@@ -20,7 +15,6 @@ router = APIRouter()
 
 @router.get("/health")
 async def health():
-    """Layer 0: Bouncer health check."""
     return {
         "layer": 0,
         "name": "Bouncer (Fast-Path Rejection)",
@@ -39,19 +33,7 @@ async def vt_lookup(
     file_hash: str,
     db: Session = Depends(get_db)
 ):
-    """
-    Lookup file hash in VirusTotal.
-    
-    Example:
-        POST /api/layer0/vt-lookup?file_hash=abc123def456...
-    
-    Returns:
-        {
-            "cached": bool,
-            "score": float (0.0-1.0),
-            "status": "clean" | "suspicious" | "malicious"
-        }
-    """
+
     try:
         if not file_hash or len(file_hash) != 64:
             raise HTTPException(status_code=400, detail="Invalid SHA256 hash")
@@ -62,7 +44,7 @@ async def vt_lookup(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ VT lookup failed: {e}")
+        logger.error(f"  VT lookup failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -71,20 +53,7 @@ async def entropy_check(
     file_path: str,
     file_size: int
 ):
-    """
-    Check file entropy (Tier 2/3).
-    
-    Example:
-        POST /api/layer0/entropy-check?file_path=C:\\malware.exe&file_size=1024
-    
-    Returns:
-        {
-            "status": "PASS" | "WARN" | "CRITICAL",
-            "entropy": float,
-            "threshold": float,
-            "file_path": str
-        }
-    """
+
     try:
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
@@ -107,7 +76,7 @@ async def entropy_check(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Entropy check failed: {e}")
+        logger.error(f"  Entropy check failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -116,22 +85,7 @@ async def analyze_file(
     file_path: str,
     db: Session = Depends(get_db)
 ):
-    """
-    Complete file analysis (VT + entropy + signature).
-    
-    Example:
-        POST /api/layer0/analyze-file?file_path=C:\\malware.exe
-    
-    Returns:
-        {
-            "status": "PASS" | "WARN" | "CRITICAL" | "BLOCK",
-            "file_hash": str,
-            "entropy": float,
-            "vt_score": float,
-            "signals": [str],
-            "message": str
-        }
-    """
+
     try:
         if not os.path.exists(file_path):
             raise HTTPException(status_code=404, detail=f"File not found: {file_path}")
@@ -139,7 +93,7 @@ async def analyze_file(
         # Get file size
         file_size = os.path.getsize(file_path)
         
-        logger.info(f"📊 Analyzing file: {file_path}")
+        logger.info(f"  Analyzing file: {file_path}")
         logger.info(f"   Size: {file_size / 1024 / 1024:.2f} MB")
         
         # Calculate file hash first
@@ -160,7 +114,7 @@ async def analyze_file(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ File analysis failed: {e}")
+        logger.error(f"  File analysis failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -169,24 +123,7 @@ async def get_vt_cache(
     db: Session = Depends(get_db),
     limit: int = 100
 ):
-    """
-    Get all cached VirusTotal lookups.
-    
-    Example:
-        GET /api/layer0/vt-cache?limit=100
-    
-    Returns:
-        {
-            "total": int,
-            "caches": [
-                {
-                    "hash_sha256": str,
-                    "score": float,
-                    "queried_at": datetime
-                }
-            ]
-        }
-    """
+
     try:
         caches = db.query(VTCache).limit(limit).all()
         return {
@@ -203,22 +140,18 @@ async def get_vt_cache(
         }
     
     except Exception as e:
-        logger.error(f"❌ Failed to fetch VT cache: {e}")
+        logger.error(f"  Failed to fetch VT cache: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 from backend.database.models import VTCache, AuditLog
-
-# ... (keep other imports)
 
 @router.get("/recent-analysis")
 async def get_recent_analysis(
     db: Session = Depends(get_db),
     limit: int = 50
 ):
-    """
-    Get recent automatic file analysis logs.
-    """
+
     try:
         from backend.database.models import AuditLog
         logs = db.query(AuditLog).filter(
@@ -239,7 +172,7 @@ async def get_recent_analysis(
             for log in logs
         ]
     except Exception as e:
-        logger.error(f"❌ Failed to fetch recent analysis: {e}")
+        logger.error(f"  Failed to fetch recent analysis: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -248,12 +181,7 @@ async def delete_vt_cache_entry(
     hash_sha256: str,
     db: Session = Depends(get_db)
 ):
-    """
-    Delete a VT cache entry.
-    
-    Example:
-        DELETE /api/layer0/vt-cache/abc123def456...
-    """
+
     try:
         cache_entry = db.query(VTCache).filter(VTCache.hash_sha256 == hash_sha256).first()
         
@@ -263,11 +191,11 @@ async def delete_vt_cache_entry(
         db.delete(cache_entry)
         db.commit()
         
-        logger.info(f"🗑️  Deleted VT cache: {hash_sha256[:16]}...")
+        logger.info(f"Deleted VT cache: {hash_sha256[:16]}...")
         return {"deleted": True, "hash": hash_sha256}
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to delete cache: {e}")
+        logger.error(f"  Failed to delete cache: {e}")
         raise HTTPException(status_code=500, detail=str(e))

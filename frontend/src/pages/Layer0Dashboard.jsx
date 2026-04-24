@@ -126,7 +126,7 @@ export default function Layer0Dashboard() {
                 <div className="h-full flex items-center justify-center py-20"><LoadingSpinner size="lg" /></div>
               ) : recentScans.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center py-20 text-center px-10">
-                    <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-4xl mb-4 text-slate-200">📡</div>
+                    <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-4xl mb-4 text-slate-200"> </div>
                     <h4 className="font-bold text-slate-400">Awaiting Kernel Events</h4>
                     <p className="text-xs text-slate-300 max-w-xs mt-2 italic">The system is operational and listening. Create or download a file to see real-time analysis.</p>
                 </div>

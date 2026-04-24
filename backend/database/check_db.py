@@ -4,7 +4,7 @@ import os
 db_path = r"d:\FYP\Argus\backend\database\argus.db"
 print(f"Checking DB at: {db_path}")
 if not os.path.exists(db_path):
-    print("❌ DB file not found!")
+    print("  DB file not found!")
     exit()
 
 conn = sqlite3.connect(db_path)

@@ -38,7 +38,7 @@ class RetrainingService:
             # Data quality: % of incidents with feedback
             data_quality = (total_feedback / len(incidents) * 100) if incidents else 0
             
-            logger.debug(f"📊 Weekly data: {len(incidents)} incidents, {tp_count} TP, {fp_count} FP, {unknown_count} UNKNOWN")
+            logger.debug(f"  Weekly data: {len(incidents)} incidents, {tp_count} TP, {fp_count} FP, {unknown_count} UNKNOWN")
             logger.debug(f"   FP rate: {fp_rate:.1f}%, Data quality: {data_quality:.1f}%")
             
             return {
@@ -52,7 +52,7 @@ class RetrainingService:
             }
         
         except Exception as e:
-            logger.error(f"❌ Failed to get weekly data: {e}")
+            logger.error(f"  Failed to get weekly data: {e}")
             return {
                 "incidents": [],
                 "feedbacks": [],
@@ -124,7 +124,7 @@ class RetrainingService:
             }
         
         except Exception as e:
-            logger.error(f"❌ Failed to extract features: {e}")
+            logger.error(f"  Failed to extract features: {e}")
             return {}
     
     @staticmethod
@@ -152,7 +152,7 @@ class RetrainingService:
                 return len(G.nodes())
         
         except Exception as e:
-            logger.error(f"❌ Failed to calculate spawn depth: {e}")
+            logger.error(f"  Failed to calculate spawn depth: {e}")
             return 0
     
     @staticmethod
@@ -220,14 +220,14 @@ class RetrainingService:
             }
         
         except Exception as e:
-            logger.error(f"❌ Failed to evaluate model: {e}")
+            logger.error(f"  Failed to evaluate model: {e}")
             return {}
     
     @staticmethod
     def retrain_model(db: Session) -> dict:
         try:
             logger.info("=" * 80)
-            logger.info("🔄 WEEKLY RETRAINING STARTING")
+            logger.info("  WEEKLY RETRAINING STARTING")
             logger.info("=" * 80)
             
             # Step 1: Collect weekly data
@@ -236,12 +236,12 @@ class RetrainingService:
             # Step 2: Evaluate quality
             quality_eval = RetrainingService.evaluate_model_quality(weekly_data)
             
-            logger.info(f"📊 Quality Score: {quality_eval['quality_score']:.1f}/100")
+            logger.info(f"  Quality Score: {quality_eval['quality_score']:.1f}/100")
             logger.info(f"   FP Rate: {quality_eval['fp_rate']:.1f}%")
             
             # Step 3: Check if retraining should proceed
             if quality_eval["fp_rate"] > settings.learning_fp_rate_threshold * 100:
-                logger.warning(f"⚠️  FP rate too high ({quality_eval['fp_rate']:.1f}%), rejecting new model")
+                logger.warning(f"   FP rate too high ({quality_eval['fp_rate']:.1f}%), rejecting new model")
                 return {
                     "status": "rejected",
                     "reason": f"FP rate threshold exceeded ({quality_eval['fp_rate']:.1f}%)",
@@ -257,7 +257,7 @@ class RetrainingService:
             logger.info(f"   - P-matrix: Recalibrate from {len(weekly_data['feedbacks'])} feedback")
             
             # Step 5: Validation
-            logger.info("✅ Model validation passed")
+            logger.info("  Model validation passed")
             
             logger.info("=" * 80)
             logger.info("🎉 WEEKLY RETRAINING COMPLETED SUCCESSFULLY")
@@ -271,7 +271,7 @@ class RetrainingService:
             }
         
         except Exception as e:
-            logger.error(f"❌ Retraining failed: {e}")
+            logger.error(f"  Retraining failed: {e}")
             return {
                 "status": "error",
                 "reason": str(e),

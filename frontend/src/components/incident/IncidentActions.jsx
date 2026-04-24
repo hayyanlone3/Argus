@@ -62,7 +62,7 @@ export default function IncidentActions({ incident, onUpdate }) {
           disabled={loading}
           className="btn-success w-full btn-sm"
         >
-          🎯 Resolve
+            Resolve
         </button>
       </div>
 
@@ -76,8 +76,8 @@ export default function IncidentActions({ incident, onUpdate }) {
               className="form-input"
             >
               <option value="UNKNOWN">Unknown</option>
-              <option value="TP">True Positive ✅</option>
-              <option value="FP">False Positive ❌</option>
+              <option value="TP">True Positive  </option>
+              <option value="FP">False Positive  </option>
             </select>
           </div>
 

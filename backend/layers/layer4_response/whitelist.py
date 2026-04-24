@@ -51,7 +51,7 @@ class WhitelistService:
                 
                 # Tier 1 should not have hash (reduces false positives)
                 if whitelist_data.hash_sha256:
-                    logger.warning(f"⚠️  Tier 1 whitelist should not have hash: {whitelist_data.path}")
+                    logger.warning(f"   Tier 1 whitelist should not have hash: {whitelist_data.path}")
             
             # Validate Tier 2/3 constraints
             elif whitelist_data.tier in [2, 3]:
@@ -71,7 +71,7 @@ class WhitelistService:
             ).first()
             
             if existing:
-                logger.warning(f"⚠️  Whitelist entry already exists: {whitelist_data.path}")
+                logger.warning(f"   Whitelist entry already exists: {whitelist_data.path}")
                 return existing
             
             # Create entry
@@ -88,13 +88,13 @@ class WhitelistService:
             db.commit()
             db.refresh(whitelist)
             
-            logger.info(f"✅ Added whitelist (Tier {whitelist_data.tier}): {whitelist_data.path}")
+            logger.info(f"  Added whitelist (Tier {whitelist_data.tier}): {whitelist_data.path}")
             return whitelist
         
         except ValidationError:
             raise
         except Exception as e:
-            logger.error(f"❌ Failed to add whitelist: {e}")
+            logger.error(f"  Failed to add whitelist: {e}")
             db.rollback()
             raise
     
@@ -123,7 +123,7 @@ class WhitelistService:
             ).first()
             
             if tier1:
-                logger.debug(f"✅ Whitelist match (Tier 1): {file_path}")
+                logger.debug(f"  Whitelist match (Tier 1): {file_path}")
                 return (True, 1, tier1.reason or "Tier 1 path match")
             
             # Tier 2: Path + Hash match
@@ -134,7 +134,7 @@ class WhitelistService:
             ).first()
             
             if tier2:
-                logger.debug(f"✅ Whitelist match (Tier 2): {file_path} (hash verified)")
+                logger.debug(f"  Whitelist match (Tier 2): {file_path} (hash verified)")
                 return (True, 2, tier2.reason or "Tier 2 path+hash match")
             
             # Tier 3: Hash-only match (for files moved to different locations)
@@ -145,14 +145,14 @@ class WhitelistService:
                 ).first()
                 
                 if tier3:
-                    logger.debug(f"✅ Whitelist match (Tier 3): {file_hash} (hash-only)")
+                    logger.debug(f"  Whitelist match (Tier 3): {file_hash} (hash-only)")
                     return (True, 3, tier3.reason or "Tier 3 hash match")
             
-            logger.debug(f"❌ No whitelist match: {file_path}")
+            logger.debug(f"  No whitelist match: {file_path}")
             return (False, None, "Not whitelisted")
         
         except Exception as e:
-            logger.error(f"❌ Whitelist check failed: {e}")
+            logger.error(f"  Whitelist check failed: {e}")
             return (False, None, "Error checking whitelist")
     
     @staticmethod
@@ -176,13 +176,13 @@ class WhitelistService:
             db.delete(whitelist)
             db.commit()
             
-            logger.info(f"🗑️  Removed whitelist: {whitelist_id}")
+            logger.info(f"   Removed whitelist: {whitelist_id}")
             return True
         
         except ValidationError:
             raise
         except Exception as e:
-            logger.error(f"❌ Failed to remove whitelist: {e}")
+            logger.error(f"  Failed to remove whitelist: {e}")
             db.rollback()
             raise
     
@@ -214,5 +214,5 @@ class WhitelistService:
             }
         
         except Exception as e:
-            logger.error(f"❌ Failed to get whitelist stats: {e}")
+            logger.error(f"  Failed to get whitelist stats: {e}")
             return {}

@@ -45,5 +45,5 @@ def load_beth_model() -> dict:
         return beth_baseline
     
     except Exception as e:
-        logger.error(f"❌ Failed to load BETH model: {e}")
+        logger.error(f"  Failed to load BETH model: {e}")
         return {}

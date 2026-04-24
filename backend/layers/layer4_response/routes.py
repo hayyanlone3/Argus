@@ -71,7 +71,7 @@ async def quarantine_file(
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"❌ Quarantine failed: {e}")
+        logger.error(f"  Quarantine failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -93,7 +93,7 @@ async def list_quarantine(
             "quarantine": [QuarantineResponse.from_orm(q) for q in result["quarantined"]]
         }
     except Exception as e:
-        logger.error(f"❌ Failed to list quarantine: {e}")
+        logger.error(f"  Failed to list quarantine: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -118,7 +118,7 @@ async def restore_file(
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"❌ Restore failed: {e}")
+        logger.error(f"  Restore failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -129,7 +129,7 @@ async def get_quarantine_stats(db: Session = Depends(get_db)):
         stats = QuarantineService.get_quarantine_stats(db)
         return stats
     except Exception as e:
-        logger.error(f"❌ Failed to get stats: {e}")
+        logger.error(f"  Failed to get stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -166,7 +166,7 @@ async def add_whitelist(
     except ValidationError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error(f"❌ Failed to add whitelist: {e}")
+        logger.error(f"  Failed to add whitelist: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -195,7 +195,7 @@ async def list_whitelist(
             "whitelist": [WhitelistResponse.from_orm(e) for e in entries]
         }
     except Exception as e:
-        logger.error(f"❌ Failed to list whitelist: {e}")
+        logger.error(f"  Failed to list whitelist: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -222,7 +222,7 @@ async def check_whitelist(
             "reason": reason
         }
     except Exception as e:
-        logger.error(f"❌ Whitelist check failed: {e}")
+        logger.error(f"  Whitelist check failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -239,7 +239,7 @@ async def remove_whitelist(
     except ValidationError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
-        logger.error(f"❌ Failed to remove whitelist: {e}")
+        logger.error(f"  Failed to remove whitelist: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -250,7 +250,7 @@ async def get_whitelist_stats(db: Session = Depends(get_db)):
         stats = WhitelistService.get_whitelist_stats(db)
         return stats
     except Exception as e:
-        logger.error(f"❌ Failed to get stats: {e}")
+        logger.error(f"  Failed to get stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -278,7 +278,7 @@ async def isolate_process(
             raise HTTPException(status_code=500, detail="Failed to kill process")
     
     except Exception as e:
-        logger.error(f"❌ Isolation failed: {e}")
+        logger.error(f"  Isolation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -302,7 +302,7 @@ async def isolate_process_by_name(
             return {"killed": False, "process_name": process_name, "message": "Process not found"}
     
     except Exception as e:
-        logger.error(f"❌ Isolation failed: {e}")
+        logger.error(f"  Isolation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -342,7 +342,7 @@ async def submit_incident_feedback(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Feedback submission failed: {e}")
+        logger.error(f"  Feedback submission failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -353,5 +353,5 @@ async def get_feedback_stats(db: Session = Depends(get_db)):
         stats = FeedbackService.get_feedback_stats(db)
         return stats
     except Exception as e:
-        logger.error(f"❌ Failed to get feedback stats: {e}")
+        logger.error(f"  Failed to get feedback stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))

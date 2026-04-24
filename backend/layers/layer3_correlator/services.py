@@ -57,7 +57,7 @@ class CorrelatorService:
                 return False
         
         except Exception as e:
-            logger.error(f"❌ Failed to check proximity: {e}")
+            logger.error(f"  Failed to check proximity: {e}")
             return False
     
     @staticmethod
@@ -93,7 +93,7 @@ class CorrelatorService:
             return current_id
         
         except Exception as e:
-            logger.error(f"❌ Failed to get process root: {e}")
+            logger.error(f"  Failed to get process root: {e}")
             return process_node_id
     
     @staticmethod
@@ -121,7 +121,7 @@ class CorrelatorService:
             if CorrelatorService.check_graph_proximity(db, edge_1.source_id, edge_2.source_id, CORRELATION_MAX_HOPS):
                 signals += 1
                 confidence_sum += SIGNAL_PROXIMITY_WEIGHT
-                logger.debug(f"✅ Signal 1 (proximity): edges {edge_1.id} and {edge_2.id} are close")
+                logger.debug(f"  Signal 1 (proximity): edges {edge_1.id} and {edge_2.id} are close")
             
             # Signal 2: Same process tree root
             node_1 = db.query(Node).filter(Node.id == edge_1.source_id).first()
@@ -134,19 +134,19 @@ class CorrelatorService:
                 if root_1 == root_2:
                     signals += 1
                     confidence_sum += SIGNAL_TREE_ROOT_WEIGHT
-                    logger.debug(f"✅ Signal 2 (tree root): edges {edge_1.id} and {edge_2.id} share root")
+                    logger.debug(f"  Signal 2 (tree root): edges {edge_1.id} and {edge_2.id} share root")
             
             # Signal 3: Same file hash
             if edge_1.edge_metadata and edge_2.edge_metadata:
                 if edge_1.edge_metadata.get("file_hash") == edge_2.edge_metadata.get("file_hash"):
                     signals += 1
                     confidence_sum += SIGNAL_HASH_WEIGHT
-                    logger.debug(f"✅ Signal 3 (file hash): edges {edge_1.id} and {edge_2.id} match")
+                    logger.debug(f"  Signal 3 (file hash): edges {edge_1.id} and {edge_2.id} match")
             
             return (signals, confidence_sum)
         
         except Exception as e:
-            logger.error(f"❌ Failed to count signals: {e}")
+            logger.error(f"  Failed to count signals: {e}")
             return (0, 0.0)
     
     @staticmethod
@@ -196,7 +196,7 @@ class CorrelatorService:
             return groups
         
         except Exception as e:
-            logger.error(f"❌ Failed to group edges: {e}")
+            logger.error(f"  Failed to group edges: {e}")
             return {}
     
     @staticmethod
@@ -243,7 +243,7 @@ class CorrelatorService:
             return incident
         
         except Exception as e:
-            logger.error(f"❌ Failed to create incident: {e}")
+            logger.error(f"  Failed to create incident: {e}")
             db.rollback()
             raise
     
@@ -291,7 +291,7 @@ class CorrelatorService:
             return "Unknown"
         
         except Exception as e:
-            logger.error(f"❌ Failed to determine MITRE stage: {e}")
+            logger.error(f"  Failed to determine MITRE stage: {e}")
             return "Unknown"
     
     @staticmethod
@@ -336,7 +336,7 @@ class CorrelatorService:
             }
         
         except Exception as e:
-            logger.error(f"❌ Failed to get incident chain: {e}")
+            logger.error(f"  Failed to get incident chain: {e}")
             return {}
     
     @staticmethod
@@ -394,6 +394,6 @@ class CorrelatorService:
             return incident
 
         except Exception as e:
-            logger.error(f"❌ upsert_incident_for_session failed: {e}")
+            logger.error(f"  upsert_incident_for_session failed: {e}")
             db.rollback()
             return None

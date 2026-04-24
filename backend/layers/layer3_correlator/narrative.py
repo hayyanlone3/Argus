@@ -44,7 +44,7 @@ class NarrativeGenerator:
             return narrative
         
         except Exception as e:
-            logger.error(f"❌ Failed to generate narrative: {e}")
+            logger.error(f"  Failed to generate narrative: {e}")
             return "Unable to generate narrative."
     
     @staticmethod
@@ -54,18 +54,18 @@ class NarrativeGenerator:
             # Check for injection
             injection_edges = [e for e in edges if e.edge_type == EdgeType.INJECTED_INTO]
             if injection_edges:
-                return f"🔴 CRITICAL: Code injection detected. {len(injection_edges)} injection event(s) observed in process chain. Immediate isolation recommended."
+                return f"  CRITICAL: Code injection detected. {len(injection_edges)} injection event(s) observed in process chain. Immediate isolation recommended."
             
             # Check for AMSI disable
             amsi_edges = [e for e in edges if e.edge_type == EdgeType.DISABLED_AMSI]
             if amsi_edges:
-                return f"🔴 CRITICAL: AMSI monitoring disabled. Indicates evasion of Microsoft security controls. {len(amsi_edges)} AMSI tampering event(s)."
+                return f"  CRITICAL: AMSI monitoring disabled. Indicates evasion of Microsoft security controls. {len(amsi_edges)} AMSI tampering event(s)."
             
             # Generic critical
-            return f"🔴 CRITICAL: Multiple anomalous behaviors detected across {len(edges)} events in process chain. High confidence of compromise."
+            return f"  CRITICAL: Multiple anomalous behaviors detected across {len(edges)} events in process chain. High confidence of compromise."
         
         except Exception as e:
-            logger.error(f"❌ Failed to generate critical narrative: {e}")
+            logger.error(f"  Failed to generate critical narrative: {e}")
             return "CRITICAL: Anomalous behavior detected."
     
     @staticmethod
@@ -75,23 +75,23 @@ class NarrativeGenerator:
             # Check for script execution
             script_edges = [e for e in edges if e.edge_type == EdgeType.EXECUTED_SCRIPT]
             if script_edges:
-                return f"🟡 WARNING: Script execution detected. {len(script_edges)} script execution event(s). Recommend manual investigation."
+                return f"  WARNING: Script execution detected. {len(script_edges)} script execution event(s). Recommend manual investigation."
             
             # Check for WMI
             wmi_edges = [e for e in edges if e.edge_type == EdgeType.SUBSCRIBED_WMI]
             if wmi_edges:
-                return f"🟡 WARNING: WMI subscriptions created. {len(wmi_edges)} WMI event(s). May indicate persistence technique."
+                return f"  WARNING: WMI subscriptions created. {len(wmi_edges)} WMI event(s). May indicate persistence technique."
             
             # Check for registry modifications
             reg_edges = [e for e in edges if e.edge_type == EdgeType.MODIFIED_REG]
             if reg_edges:
-                return f"🟡 WARNING: Registry modifications detected. {len(reg_edges)} registry event(s). Suspicious modification patterns."
+                return f"  WARNING: Registry modifications detected. {len(reg_edges)} registry event(s). Suspicious modification patterns."
             
             # Generic warning
-            return f"🟡 WARNING: Suspicious behavior detected. {len(edges)} event(s) show anomalous patterns requiring investigation."
+            return f"  WARNING: Suspicious behavior detected. {len(edges)} event(s) show anomalous patterns requiring investigation."
         
         except Exception as e:
-            logger.error(f"❌ Failed to generate warning narrative: {e}")
+            logger.error(f"  Failed to generate warning narrative: {e}")
             return "WARNING: Suspicious behavior detected."
     
     @staticmethod
@@ -105,13 +105,13 @@ class NarrativeGenerator:
             return f"🟠 UNKNOWN: Process chain with {spawn_count} spawned processes, {read_count} file reads, {write_count} file writes. Requires further analysis."
         
         except Exception as e:
-            logger.error(f"❌ Failed to generate unknown narrative: {e}")
+            logger.error(f"  Failed to generate unknown narrative: {e}")
             return "UNKNOWN: Behavior requires investigation."
     
     @staticmethod
     def _generate_benign(edges: list) -> str:
         """Generate narrative for BENIGN incidents."""
-        return f"🟢 BENIGN: Process chain with {len(edges)} event(s). No anomalies detected. Normal system activity."
+        return f"   BENIGN: Process chain with {len(edges)} event(s). No anomalies detected. Normal system activity."
     
     @staticmethod
     def summarize_chain(nodes: list, edges: list) -> str:
@@ -146,7 +146,7 @@ class NarrativeGenerator:
             return " | ".join(chains) if chains else f"{len(nodes)} nodes"
         
         except Exception as e:
-            logger.error(f"❌ Failed to summarize chain: {e}")
+            logger.error(f"  Failed to summarize chain: {e}")
             return f"{len(nodes)} nodes, {len(edges)} edges"
     
     @staticmethod
@@ -174,5 +174,5 @@ class NarrativeGenerator:
             return current
         
         except Exception as e:
-            logger.error(f"❌ Failed to trace chain: {e}")
+            logger.error(f"  Failed to trace chain: {e}")
             return []

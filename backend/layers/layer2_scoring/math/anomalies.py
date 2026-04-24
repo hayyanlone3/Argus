@@ -38,12 +38,12 @@ def detect_burst(values: list, threshold: float = 3.0) -> bool:
         is_burst = abs(z_score) > threshold
         
         if is_burst:
-            logger.debug(f"🔴 Burst detected: {values[-1]:.2f} (z={z_score:.2f})")
+            logger.debug(f"  Burst detected: {values[-1]:.2f} (z={z_score:.2f})")
         
         return is_burst
     
     except Exception as e:
-        logger.error(f"❌ Burst detection failed: {e}")
+        logger.error(f"  Burst detection failed: {e}")
         return False
 
 
@@ -63,11 +63,11 @@ def detect_cycle(values: list) -> bool:
         
         # Simple: check if last 2 values match first 2
         if values[-2:] == values[:2]:
-            logger.debug("🔴 Cycle detected")
+            logger.debug("  Cycle detected")
             return True
         
         return False
     
     except Exception as e:
-        logger.error(f"❌ Cycle detection failed: {e}")
+        logger.error(f"  Cycle detection failed: {e}")
         return False

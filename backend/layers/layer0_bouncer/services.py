@@ -1,12 +1,3 @@
-"""
-Layer 0: Bouncer Service
-Implements fast-path rejection logic:
-1. VT hash lookup
-2. Entropy analysis (multi-tier)
-3. Digital signature verification
-4. Return: PASS, WARN, CRITICAL, BLOCK
-"""
-
 import hashlib
 import aiohttp
 from datetime import datetime, timedelta
@@ -32,26 +23,8 @@ logger = setup_logger(__name__)
 
 
 class BouncerService:
-    """Layer 0: Frontline Bouncer Service"""
-    
     @staticmethod
     async def vt_hash_lookup(file_hash: str, db: Session) -> dict:
-        """
-        Look up file hash in VirusTotal.
-        
-        Returns cached result if valid, otherwise queries VT API.
-        
-        Args:
-            file_hash: SHA256 hash of file
-            db: Database session
-            
-        Returns:
-            {
-                "cached": bool,
-                "score": float (0.0-1.0),
-                "status": "clean" | "suspicious" | "malicious"
-            }
-        """
         try:
             # Check local cache first
             vt_cache = db.query(VTCache).filter(VTCache.hash_sha256 == file_hash).first()
@@ -60,7 +33,7 @@ class BouncerService:
                 # Check if cache is still valid
                 cache_age = datetime.utcnow() - vt_cache.queried_at
                 if cache_age < timedelta(days=settings.vt_cache_ttl_days):
-                    logger.debug(f"💾 VT cache hit: {file_hash[:8]}...")
+                    logger.debug(f"VT cache hit: {file_hash[:8]}...")
                     
                     # Determine status
                     if vt_cache.score > 0.5:
@@ -78,10 +51,10 @@ class BouncerService:
             
             # Query VirusTotal API
             if not settings.virustotal_api_key:
-                logger.debug("⚠️  VT API key not configured, skipping lookup")
+                logger.debug("   VT API key not configured, skipping lookup")
                 return {"cached": False, "score": 0.0, "status": "unknown"}
             
-            logger.debug(f"🌐 Querying VirusTotal for {file_hash[:8]}...")
+            logger.debug(f"Querying VirusTotal for {file_hash[:8]}...")
             
             async with aiohttp.ClientSession() as session:
                 headers = {"x-apikey": settings.virustotal_api_key}
@@ -110,7 +83,7 @@ class BouncerService:
                             db.add(vt_cache)
                             db.commit()
                             
-                            logger.info(f"✅ VT: {file_hash[:8]}... = {score:.1%} malicious ({status})")
+                            logger.info(f"  VT: {file_hash[:8]}... = {score:.1%} malicious ({status})")
                             
                             return {
                                 "cached": False,
@@ -119,73 +92,66 @@ class BouncerService:
                             }
                         
                         elif resp.status == 404:
-                            logger.debug(f"⚪ VT: {file_hash[:8]}... not found (benign)")
+                            logger.debug(f"VT: {file_hash[:8]}... not found (benign)")
                             return {"cached": False, "score": 0.0, "status": "clean"}
                         
                         else:
-                            logger.warning(f"⚠️  VT API error: {resp.status}")
+                            logger.warning(f"   VT API error: {resp.status}")
                             return {"cached": False, "score": 0.0, "status": "unknown"}
                 
                 except aiohttp.ClientError as e:
-                    logger.warning(f"⚠️  VT API connection error: {e}")
+                    logger.warning(f"   VT API connection error: {e}")
                     return {"cached": False, "score": 0.0, "status": "unknown"}
         
         except Exception as e:
-            logger.warning(f"⚠️  VT lookup failed: {e}")
+            logger.warning(f"   VT lookup failed: {e}")
             return {"cached": False, "score": 0.0, "status": "unknown"}
     
     @staticmethod
     def entropy_check(file_path: str, file_size: int) -> tuple:
-        """
-        Multi-layer entropy check (Tier 2/3).
-        
-        Returns:
-            (status, entropy_value)
-            status: PASS, WARN, CRITICAL
-        """
         try:
             # Tier 2: Full entropy for files ≤10MB
             if file_size <= 10 * 1024 * 1024:
                 entropy_val = calculate_shannon_entropy(file_path)
-                logger.debug(f"📊 Tier 2 (full file) entropy: {entropy_val:.2f}")
+                logger.debug(f"Tier 2 (full file) entropy: {entropy_val:.2f}")
             else:
                 # Tier 3: Sample-based entropy for >10MB
                 entropy_val = calculate_sample_entropy(file_path)
-                logger.debug(f"📊 Tier 3 (sample) entropy: {entropy_val:.2f}")
+                logger.debug(f"Tier 3 (sample) entropy: {entropy_val:.2f}")
             
             # Low entropy = normal
             if entropy_val < ENTROPY_THRESHOLD_MEDIUM:
-                logger.debug(f"✅ Low entropy ({entropy_val:.2f}) = likely normal")
+                logger.debug(f"  Low entropy ({entropy_val:.2f}) = likely normal")
                 return ("PASS", entropy_val)
             
             # High entropy requires multi-layer confirmation
             if entropy_val > ENTROPY_THRESHOLD_HIGH:
-                logger.warning(f"⚠️  High entropy detected: {entropy_val:.2f}")
+                logger.warning(f"   High entropy detected: {entropy_val:.2f}")
                 
                 # Exception 1: Microsoft-signed
                 if check_digital_signature(file_path):
-                    logger.info(f"✅ High entropy but Microsoft-signed: PASS")
+                    logger.info(f"  High entropy but Microsoft-signed: PASS")
                     return ("PASS", entropy_val)
                 
                 # Exception 2: Known packer
                 if is_known_packer(file_path):
-                    logger.info(f"✅ High entropy but known packer: PASS")
+                    logger.info(f"  High entropy but known packer: PASS")
                     return ("PASS", entropy_val)
                 
                 # Exception 3: Low code section entropy
                 code_entropy = get_file_code_section_entropy(file_path)
                 if code_entropy < 6.5:
-                    logger.info(f"✅ High overall entropy but low code entropy ({code_entropy:.2f}): PASS")
+                    logger.info(f"  High overall entropy but low code entropy ({code_entropy:.2f}): PASS")
                     return ("PASS", entropy_val)
                 
                 # No exceptions → flag as anomalous
-                logger.warning(f"⚠️  High entropy + no exceptions: WARN")
+                logger.warning(f"   High entropy + no exceptions: WARN")
                 return ("WARN", entropy_val)
             
             return ("PASS", entropy_val)
         
         except Exception as e:
-            logger.error(f"❌ Entropy check failed: {e}")
+            logger.error(f"Entropy check failed: {e}")
             return ("UNCERTAIN", 0.0)
     
     @staticmethod
@@ -197,7 +163,7 @@ class BouncerService:
     ) -> dict:
         # HEURISTIC OVERRIDE: For Demo/Testing
         if file_path and "malware" in file_path.lower():
-            logger.warning(f"🚨 HEURISTIC MATCH: Malicious pattern detected in filename: {file_path}")
+            logger.warning(f"HEURISTIC MATCH: Malicious pattern detected in filename: {file_path}")
             return {
                 "status": "CRITICAL",
                 "file_hash": "HEURISTIC_MATCH",
@@ -253,7 +219,7 @@ class BouncerService:
             }
         
         except Exception as e:
-            logger.error(f"❌ Bouncer decision failed: {e}")
+            logger.error(f"  Bouncer decision failed: {e}")
             return {
                 "status": "UNCERTAIN",
                 "file_hash": "",

@@ -30,7 +30,7 @@ def calculate_entropy(data: bytes) -> float:
         return float(shannon)
     
     except Exception as e:
-        logger.error(f"❌ Entropy calculation failed: {e}")
+        logger.error(f"  Entropy calculation failed: {e}")
         return 0.0
 
 
@@ -64,5 +64,5 @@ def calculate_edge_entropy(edge_features: dict) -> float:
         return calculate_entropy(feature_bytes)
     
     except Exception as e:
-        logger.error(f"❌ Edge entropy calculation failed: {e}")
+        logger.error(f"  Edge entropy calculation failed: {e}")
         return 0.0

@@ -31,7 +31,7 @@ export default function FPRateChart() {
   if (error) return <div className="card border border-red-600 text-red-600">Error: {error}</div>;
 
   const fpRate = quality?.false_positive_rate_percent || 0;
-  const status = fpRate < 5 ? '✅ Good' : fpRate < 10 ? '⚠️  Acceptable' : '❌ High';
+  const status = fpRate < 5 ? '  Good' : fpRate < 10 ? '   Acceptable' : '  High';
 
   return (
     <div className="card">

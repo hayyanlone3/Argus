@@ -1,8 +1,4 @@
 # backend/layers/layer5_learning/routes.py
-"""
-Layer 5: Learning API Endpoints
-Model statistics and retraining control
-"""
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -22,7 +18,6 @@ _STATS_CACHE_TTL_SEC = 60
 
 @router.get("/health")
 async def health():
-    """Layer 5: Learning Engine health check."""
     return {
         "layer": 5,
         "name": "Learning Engine",
@@ -39,12 +34,6 @@ async def health():
 
 @router.get("/stats")
 async def get_learning_stats(db: Session = Depends(get_db)):
-    """
-    Get learning model statistics.
-    
-    Example:
-        GET /api/layer5/stats
-    """
     try:
         now = datetime.utcnow()
         ts = _STATS_CACHE["ts"]
@@ -79,38 +68,26 @@ async def get_learning_stats(db: Session = Depends(get_db)):
         return payload
 
     except Exception as e:
-        logger.error(f"❌ Failed to get stats: {e}")
+        logger.error(f"Failed to get stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/retrain")
 async def trigger_retraining(db: Session = Depends(get_db)):
-    """
-    Manually trigger retraining (normally runs Friday 23:00 UTC).
-    
-    Example:
-        POST /api/layer5/retrain
-    """
     try:
-        logger.info("🔄 Manual retraining triggered via API")
+        logger.info("Manual retraining triggered via API")
         
         result = RetrainingService.retrain_model(db)
         
         return result
     
     except Exception as e:
-        logger.error(f"❌ Retraining failed: {e}")
+        logger.error(f"Retraining failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/model-info")
 async def get_model_info():
-    """
-    Get current model information.
-    
-    Example:
-        GET /api/layer5/model-info
-    """
     try:
         return {
             "version": "2.2.0",
@@ -135,18 +112,12 @@ async def get_model_info():
         }
     
     except Exception as e:
-        logger.error(f"❌ Failed to get model info: {e}")
+        logger.error(f"Failed to get model info: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/feedback-quality")
 async def get_feedback_quality(db: Session = Depends(get_db)):
-    """
-    Get feedback data quality metrics.
-    
-    Example:
-        GET /api/layer5/feedback-quality
-    """
     try:
         # Last 7 days
         cutoff = datetime.utcnow() - timedelta(days=7)
@@ -175,18 +146,12 @@ async def get_feedback_quality(db: Session = Depends(get_db)):
         }
     
     except Exception as e:
-        logger.error(f"❌ Failed to get feedback quality: {e}")
+        logger.error(f"Failed to get feedback quality: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/training-progress")
 async def get_training_progress(db: Session = Depends(get_db)):
-    """
-    Get training progress metrics.
-    
-    Example:
-        GET /api/layer5/training-progress
-    """
     try:
         # Count incidents by severity
         incidents = db.query(Incident).all()
@@ -222,5 +187,5 @@ async def get_training_progress(db: Session = Depends(get_db)):
         }
     
     except Exception as e:
-        logger.error(f"❌ Failed to get training progress: {e}")
+        logger.error(f"Failed to get training progress: {e}")
         raise HTTPException(status_code=500, detail=str(e))

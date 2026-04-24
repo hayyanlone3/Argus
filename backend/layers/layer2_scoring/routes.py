@@ -98,7 +98,7 @@ async def score_channel_2a(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to score channel 2A: {e}")
+        logger.error(f"  Failed to score channel 2A: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -129,7 +129,7 @@ async def score_channel_2b(
         }
     
     except Exception as e:
-        logger.error(f"❌ Failed to score channel 2B: {e}")
+        logger.error(f"  Failed to score channel 2B: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -168,7 +168,7 @@ async def score_channel_2c(
         }
     
     except Exception as e:
-        logger.error(f"❌ Failed to score channel 2C: {e}")
+        logger.error(f"  Failed to score channel 2C: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -222,7 +222,7 @@ async def decide_severity(
         }
     
     except Exception as e:
-        logger.error(f"❌ Failed to decide severity: {e}")
+        logger.error(f"  Failed to decide severity: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -251,7 +251,7 @@ async def get_scoring_stats(db: Session = Depends(get_db)):
         }
     
     except Exception as e:
-        logger.error(f"❌ Failed to get stats: {e}")
+        logger.error(f"  Failed to get stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -317,7 +317,7 @@ async def get_live_latest(
 
         return {"total": len(filtered), "items": filtered}
     except Exception as e:
-        logger.error(f"❌ Failed to get live latest: {e}")
+        logger.error(f"  Failed to get live latest: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -335,5 +335,5 @@ async def get_live_event(event_id: str):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Failed to get live event: {e}")
+        logger.error(f"  Failed to get live event: {e}")
         raise HTTPException(status_code=500, detail=str(e))
