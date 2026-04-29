@@ -1,6 +1,8 @@
 import hashlib
 import aiohttp
+import time
 from datetime import datetime, timedelta
+from collections import deque
 from sqlalchemy.orm import Session
 from backend.database.models import VTCache
 from backend.config import settings
@@ -18,15 +20,43 @@ from .utils import (
     get_file_code_section_entropy,
     calculate_file_hash,
 )
+import os
 
 logger = setup_logger(__name__)
+
+# VT Rate Limiter (free tier: 4 requests/minute)
+class VTRateLimiter:
+    def __init__(self):
+        self.requests = deque()
+        self.max_requests = int(os.getenv("VT_RATE_LIMIT_REQUESTS", "4"))
+        self.window = int(os.getenv("VT_RATE_LIMIT_WINDOW", "60"))
+    
+    def can_request(self) -> bool:
+        now = time.time()
+        # Remove old requests outside the window
+        while self.requests and self.requests[0] < now - self.window:
+            self.requests.popleft()
+        
+        return len(self.requests) < self.max_requests
+    
+    def record_request(self):
+        self.requests.append(time.time())
+    
+    def get_wait_time(self) -> float:
+        if not self.requests:
+            return 0.0
+        oldest = self.requests[0]
+        wait = (oldest + self.window) - time.time()
+        return max(0.0, wait)
+
+VT_LIMITER = VTRateLimiter()
 
 
 class BouncerService:
     @staticmethod
-    async def vt_hash_lookup(file_hash: str, db: Session) -> dict:
+    async def vt_hash_lookup(file_hash: str, db: Session, entropy: float = 0.0) -> dict:
         try:
-            # Check local cache first
+            # Check local cache first (always check cache, no API cost)
             vt_cache = db.query(VTCache).filter(VTCache.hash_sha256 == file_hash).first()
             
             if vt_cache:
@@ -49,12 +79,27 @@ class BouncerService:
                         "status": status
                     }
             
-            # Query VirusTotal API
+            # Check if VT API is configured
             if not settings.virustotal_api_key:
                 logger.debug("   VT API key not configured, skipping lookup")
                 return {"cached": False, "score": 0.0, "status": "unknown"}
             
+            # Priority mode: Only check high-risk files to save API quota
+            priority_mode = os.getenv("VT_PRIORITY_MODE", "true").lower() == "true"
+            min_entropy = float(os.getenv("VT_MIN_ENTROPY_FOR_VT", "7.5"))
+            
+            if priority_mode and entropy < min_entropy:
+                logger.debug(f"   VT skipped: low entropy ({entropy:.2f}) in priority mode")
+                return {"cached": False, "score": 0.0, "status": "unknown"}
+            
+            # Check rate limit
+            if not VT_LIMITER.can_request():
+                wait_time = VT_LIMITER.get_wait_time()
+                logger.warning(f"   VT rate limit reached, wait {wait_time:.0f}s")
+                return {"cached": False, "score": 0.0, "status": "rate_limited"}
+            
             logger.debug(f"Querying VirusTotal for {file_hash[:8]}...")
+            VT_LIMITER.record_request()
             
             async with aiohttp.ClientSession() as session:
                 headers = {"x-apikey": settings.virustotal_api_key}
@@ -78,7 +123,7 @@ class BouncerService:
                             else:
                                 status = "clean"
                             
-                            # Cache result
+                            # Cache result (even clean results to avoid re-checking)
                             vt_cache = VTCache(hash_sha256=file_hash, score=score, queried_at=datetime.utcnow())
                             db.add(vt_cache)
                             db.commit()
@@ -93,7 +138,15 @@ class BouncerService:
                         
                         elif resp.status == 404:
                             logger.debug(f"VT: {file_hash[:8]}... not found (benign)")
+                            # Cache 404 as clean to avoid re-checking
+                            vt_cache = VTCache(hash_sha256=file_hash, score=0.0, queried_at=datetime.utcnow())
+                            db.add(vt_cache)
+                            db.commit()
                             return {"cached": False, "score": 0.0, "status": "clean"}
+                        
+                        elif resp.status == 429:
+                            logger.warning(f"   VT API rate limit (429)")
+                            return {"cached": False, "score": 0.0, "status": "rate_limited"}
                         
                         else:
                             logger.warning(f"   VT API error: {resp.status}")

@@ -40,55 +40,54 @@ class MLModelLoader:
         try:
             # Check if model directory exists
             if not os.path.exists(self.model_dir):
-                logger.warning(f"   Model directory not found: {self.model_dir}")
-                logger.warning("   ML models will not be available (using fallback)")
+                logger.debug(f"Model directory not found: {self.model_dir}")
+                logger.debug("ML models will not be available (using fallback)")
                 return False
             
             # Load Random Forest (P-Matrix)
             p_matrix_path = os.path.join(self.model_dir, 'p_matrix_model.pkl')
             if os.path.exists(p_matrix_path):
                 self.models['p_matrix'] = joblib.load(p_matrix_path)
-                logger.info("  Loaded P-Matrix model (Random Forest)")
+                logger.debug("Loaded P-Matrix model (Random Forest)")
             else:
-                logger.warning(f"   P-Matrix model not found: {p_matrix_path}")
+                logger.debug(f"P-Matrix model not found: {p_matrix_path}")
             
-            # Load XGBoost (Entropy Classifier)
             entropy_path = os.path.join(self.model_dir, 'entropy_classifier_model.pkl')
             if os.path.exists(entropy_path):
                 self.models['entropy'] = joblib.load(entropy_path)
-                logger.info("  Loaded Entropy Classifier model (XGBoost)")
+                logger.debug("Loaded Entropy Classifier model (XGBoost)")
             else:
-                logger.warning(f"   Entropy model not found: {entropy_path}")
+                logger.debug(f"Entropy model not found: {entropy_path}")
             
             # Load River (HalfSpaceTrees)
             river_path = os.path.join(self.model_dir, 'river_halfspace_model.pkl')
             if os.path.exists(river_path):
                 with open(river_path, 'rb') as f:
                     self.models['river'] = pickle.load(f)
-                logger.info("  Loaded River HalfSpaceTrees model")
+                logger.debug("Loaded River HalfSpaceTrees model")
             else:
-                logger.warning(f"   River model not found: {river_path}")
+                logger.debug(f"River model not found: {river_path}")
             
             # Load Feature Scaler
             scaler_path = os.path.join(self.model_dir, 'feature_scaler.pkl')
             if os.path.exists(scaler_path):
                 self.scaler = joblib.load(scaler_path)
-                logger.info("  Loaded Feature Scaler")
+                logger.debug("Loaded Feature Scaler")
             else:
-                logger.warning(f"   Feature scaler not found: {scaler_path}")
+                logger.debug(f"Feature scaler not found: {scaler_path}")
             
             # Check if we loaded at least some models
             if self.models:
                 self.is_loaded = True
-                logger.info(f"📦 ML Models loaded: {len(self.models)} models available")
+                logger.info(f"ML Models loaded: {len(self.models)} models available")
                 return True
             else:
-                logger.warning("   No ML models loaded - using fallback scoring")
+                logger.debug("No ML models loaded - using fallback scoring")
                 return False
         
         except Exception as e:
-            logger.error(f"  Failed to load ML models: {e}")
-            logger.warning("   Falling back to hardcoded scoring")
+            logger.error(f"Failed to load ML models: {e}")
+            logger.debug("Falling back to hardcoded scoring")
             return False
     
     def predict_p_matrix(self, features: list) -> float:

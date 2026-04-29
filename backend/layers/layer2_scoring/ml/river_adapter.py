@@ -18,9 +18,8 @@ class RiverAnomalyDetector:
             if self.model:
                 # Use actual River model
                 score = self.model.score_one(features)
-                return max(0.0, min(score, 1.0))  # Anomaly score 0.0-1.0
+                return max(0.0, min(score, 1.0))
             else:
-                # Heuristic: more activity = more anomalous
                 total_activity = sum(features.values())
                 score = min(total_activity / 50, 1.0)
                 return score

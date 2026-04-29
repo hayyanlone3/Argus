@@ -41,7 +41,7 @@ def load_beth_model() -> dict:
             }
         }
         
-        logger.info("📦 BETH baseline loaded (Phase 1 stub)")
+        logger.info("  BETH baseline loaded (Phase 1 stub)")
         return beth_baseline
     
     except Exception as e:

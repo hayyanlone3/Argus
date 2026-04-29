@@ -118,19 +118,19 @@ def generate_report(y_test, rf_pred, xgb_pred, rf_pred_proba, xgb_pred_proba,
     print("="*60)
     
     # Confusion matrices
-    print("\n📊 Plotting confusion matrices...")
+    print("\n  Plotting confusion matrices...")
     plot_confusion_matrices(y_test, rf_pred, xgb_pred)
     
     # ROC curves
-    print("📊 Plotting ROC curves...")
+    print("  Plotting ROC curves...")
     plot_roc_curves(y_test, rf_pred_proba, xgb_pred_proba)
     
     # Precision-recall curves
-    print("📊 Plotting precision-recall curves...")
+    print("  Plotting precision-recall curves...")
     plot_precision_recall_curves(y_test, rf_pred_proba, xgb_pred_proba)
     
     # Feature importance
-    print("📊 Plotting feature importance...")
+    print("  Plotting feature importance...")
     plot_feature_importance(rf_model, xgb_model, feature_names)
     
     print("\n  All visualizations saved!")

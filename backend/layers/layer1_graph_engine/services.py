@@ -39,24 +39,30 @@ class GraphService:
                 db.commit()
                 logger.debug(f"♻️  Updated node: {node_data.name}")
                 
-                # SSE publish (best-effort) for node update
+                # SSE publish (best-effort, safe failure)
                 try:
                     import asyncio
-                    asyncio.get_event_loop().create_task(
-                        event_bus.publish({
-                            "type": "node_updated",
-                            "node": {
-                                "id": existing_node.id,
-                                "type": existing_node.type.value if hasattr(existing_node.type, 'value') else existing_node.type,
-                                "name": existing_node.name,
-                                "path": existing_node.path,
-                                "hash_sha256": existing_node.hash_sha256,
-                                "path_risk": existing_node.path_risk,
-                                "first_seen": existing_node.first_seen.isoformat() if existing_node.first_seen else None,
-                                "last_seen": existing_node.last_seen.isoformat() if existing_node.last_seen else None,
-                            },
-                        })
-                    )
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            loop.create_task(
+                                event_bus.publish({
+                                    "type": "node_updated",
+                                    "node": {
+                                        "id": existing_node.id,
+                                        "type": existing_node.type.value if hasattr(existing_node.type, 'value') else existing_node.type,
+                                        "name": existing_node.name,
+                                        "path": existing_node.path,
+                                        "hash_sha256": existing_node.hash_sha256,
+                                        "path_risk": existing_node.path_risk,
+                                        "first_seen": existing_node.first_seen.isoformat() if existing_node.first_seen else None,
+                                        "last_seen": existing_node.last_seen.isoformat() if existing_node.last_seen else None,
+                                    },
+                                })
+                            )
+                    except RuntimeError:
+                        # No event loop in current thread - skip SSE publish
+                        pass
                 except Exception:
                     pass
                 
@@ -71,24 +77,30 @@ class GraphService:
 
             logger.debug(f"✨ Created node: {node_data.name} (ID: {new_node.id}, Type: {node_data.type})")
             
-            # SSE publish (best-effort) for node creation
+            # SSE publish (best-effort, safe failure)
             try:
                 import asyncio
-                asyncio.get_event_loop().create_task(
-                    event_bus.publish({
-                        "type": "node_updated",
-                        "node": {
-                            "id": new_node.id,
-                            "type": new_node.type.value if hasattr(new_node.type, 'value') else new_node.type,
-                            "name": new_node.name,
-                            "path": new_node.path,
-                            "hash_sha256": new_node.hash_sha256,
-                            "path_risk": new_node.path_risk,
-                            "first_seen": new_node.first_seen.isoformat() if new_node.first_seen else None,
-                            "last_seen": new_node.last_seen.isoformat() if new_node.last_seen else None,
-                        },
-                    })
-                )
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.create_task(
+                            event_bus.publish({
+                                "type": "node_updated",
+                                "node": {
+                                    "id": new_node.id,
+                                    "type": new_node.type.value if hasattr(new_node.type, 'value') else new_node.type,
+                                    "name": new_node.name,
+                                    "path": new_node.path,
+                                    "hash_sha256": new_node.hash_sha256,
+                                    "path_risk": new_node.path_risk,
+                                    "first_seen": new_node.first_seen.isoformat() if new_node.first_seen else None,
+                                    "last_seen": new_node.last_seen.isoformat() if new_node.last_seen else None,
+                                },
+                            })
+                        )
+                except RuntimeError:
+                    # No event loop in current thread - skip SSE publish
+                    pass
             except Exception:
                 pass
             
@@ -136,7 +148,7 @@ class GraphService:
             except Exception:
                 logger.exception("  Layer3 auto-incident creation failed")
 
-            # SSE publish (best-effort)
+            # SSE publish (best-effort, safe failure)
             try:
                 import asyncio
 
@@ -146,23 +158,29 @@ class GraphService:
                 except Exception:
                     sev_val = str(new_edge.final_severity) if new_edge.final_severity else None
 
-                asyncio.get_event_loop().create_task(
-                    event_bus.publish({
-                        "type": "edge_created",
-                        "edge": {
-                            "id": new_edge.id,
-                            "source_id": new_edge.source_id,
-                            "target_id": new_edge.target_id,
-                            "edge_type": new_edge.edge_type.value if hasattr(new_edge.edge_type, 'value') else new_edge.edge_type,
-                            "timestamp": new_edge.timestamp.isoformat() if new_edge.timestamp else None,
-                            "session_id": new_edge.session_id,
-                            "edge_metadata": new_edge.edge_metadata,
-                            "anomaly_score": new_edge.anomaly_score,
-                            "entropy_value": new_edge.entropy_value,
-                            "final_severity": sev_val,
-                        }
-                    })
-                )
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        loop.create_task(
+                            event_bus.publish({
+                                "type": "edge_created",
+                                "edge": {
+                                    "id": new_edge.id,
+                                    "source_id": new_edge.source_id,
+                                    "target_id": new_edge.target_id,
+                                    "edge_type": new_edge.edge_type.value if hasattr(new_edge.edge_type, 'value') else new_edge.edge_type,
+                                    "timestamp": new_edge.timestamp.isoformat() if new_edge.timestamp else None,
+                                    "session_id": new_edge.session_id,
+                                    "edge_metadata": new_edge.edge_metadata,
+                                    "anomaly_score": new_edge.anomaly_score,
+                                    "entropy_value": new_edge.entropy_value,
+                                    "final_severity": sev_val,
+                                }
+                            })
+                        )
+                except RuntimeError:
+                    # No event loop in current thread - skip SSE publish
+                    pass
             except Exception:
                 pass
 

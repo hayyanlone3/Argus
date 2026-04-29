@@ -36,7 +36,6 @@ async def lifespan(app: FastAPI):
     from backend.layers.layer2_scoring.event_stream import SCORING_QUEUE, GRAPH_QUEUE, EVENT_QUEUE
     from queue import Empty
 
-    # Purge old queues to ensure fresh demo context
     for q in [SCORING_QUEUE, GRAPH_QUEUE, EVENT_QUEUE]:
         while not q.empty():
             try:
@@ -56,12 +55,12 @@ async def lifespan(app: FastAPI):
         logger.info("Loading ML models...")
         ml_loader = get_ml_loader()
         if ml_loader.is_loaded:
-            logger.info("  ML models loaded successfully")
-            logger.info(f"   Available models: {list(ml_loader.models.keys())}")
+            logger.info("ML models loaded successfully")
+            logger.debug(f"Available models: {list(ml_loader.models.keys())}")
             app.state.ml_loader = ml_loader
         else:
-            logger.warning("   ML models not available (using fallback scoring)")
-            logger.warning("   To enable ML: Train models on Colab and copy .pkl files to backend/ml/models/")
+            logger.info("ML models not available (using fallback scoring)")
+            logger.debug("To enable ML: Train models on Colab and copy .pkl files to backend/ml/models/")
             app.state.ml_loader = None
 
         app.state.layer2_engine = Layer2RuntimeEngine()
@@ -173,7 +172,6 @@ app.include_router(policy_router)
 
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc):
-    """Handle 404 errors"""
     return JSONResponse(
         status_code=404,
         content={
@@ -197,11 +195,17 @@ async def server_error_handler(request: Request, exc):
 
 if __name__ == "__main__":
     import pathlib
+    import uvicorn
 
     root = pathlib.Path(__file__).resolve().parents[1]
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
-    import run_argus
-
-    run_argus.main()
+    uvicorn.run(
+        "backend.main:app",
+        host="127.0.0.1",
+        port=int(os.getenv("ARGUS_PORT", "8000")),
+        log_level="error",
+        access_log=False,
+        reload=False,
+    )

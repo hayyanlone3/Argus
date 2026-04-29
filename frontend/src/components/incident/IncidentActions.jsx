@@ -48,7 +48,7 @@ export default function IncidentActions({ incident, onUpdate }) {
           disabled={loading}
           className="btn-secondary w-full btn-sm"
         >
-          ✓ Acknowledge
+            Acknowledge
         </button>
         <button
           onClick={() => setShowFeedback(!showFeedback)}

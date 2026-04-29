@@ -1,9 +1,4 @@
 # backend/layers/layer3_correlator/services.py
-"""
-Layer 3: Correlator Service
-Groups edges into incidents using 2-of-3 signal correlation
-"""
-
 from sqlalchemy.orm import Session
 from typing import Optional
 from backend.database.models import Edge, Node, Incident
@@ -30,31 +25,30 @@ class CorrelatorService:
     
     @staticmethod
     def check_graph_proximity(db: Session, node_id_1: int, node_id_2: int, max_hops: int) -> bool:
-        """
-        Check if two nodes are within N hops (graph proximity).
-        
-        Args:
-            db: Database session
-            node_id_1, node_id_2: Node IDs to compare
-            max_hops: Maximum hops allowed
-            
-        Returns:
-            True if nodes are <=max_hops apart
-        """
         try:
-            edges = db.query(Edge).all()
-            G = nx.DiGraph()
-            for edge in edges:
-                G.add_edge(edge.source_id, edge.target_id)
+            from collections import deque
             
-            if node_id_1 not in G or node_id_2 not in G:
-                return False
+            queue = deque([(node_id_1, 0)])
+            visited = {node_id_1}
             
-            try:
-                distance = nx.shortest_path_length(G, node_id_1, node_id_2)
-                return distance <= max_hops
-            except nx.NetworkXNoPath:
-                return False
+            while queue:
+                current_id, distance = queue.popleft()
+                
+                if current_id == node_id_2 and distance > 0:
+                    return distance <= max_hops
+                
+                if distance >= max_hops:
+                    continue
+                neighbors = db.query(Edge.target_id).filter(
+                    Edge.source_id == current_id
+                ).limit(100).all()
+                
+                for (neighbor_id,) in neighbors:
+                    if neighbor_id not in visited:
+                        visited.add(neighbor_id)
+                        queue.append((neighbor_id, distance + 1))
+            
+            return False
         
         except Exception as e:
             logger.error(f"  Failed to check proximity: {e}")
@@ -62,22 +56,15 @@ class CorrelatorService:
     
     @staticmethod
     def get_process_root(db: Session, process_node_id: int) -> int:
-        """
-        Get root parent of process tree (ultimate parent process).
-        
-        Args:
-            db: Database session
-            process_node_id: Process node ID
-            
-        Returns:
-            Root process node ID
-        """
         try:
             current_id = process_node_id
             visited = set()
+            max_iterations = 50  # Prevent infinite loops
+            iterations = 0
             
-            while current_id not in visited:
+            while current_id not in visited and iterations < max_iterations:
                 visited.add(current_id)
+                iterations += 1
                 
                 # Find parent via SPAWNED edges
                 parent_edge = db.query(Edge).filter(
@@ -98,21 +85,6 @@ class CorrelatorService:
     
     @staticmethod
     def count_correlation_signals(db: Session, edge_1: Edge, edge_2: Edge) -> tuple:
-        """
-        Count correlation signals between two edges (2 of 3 needed).
-        
-        Signals:
-        1. Graph proximity (≤2 hops)
-        2. Same process tree root
-        3. Same file hash
-        
-        Args:
-            db: Database session
-            edge_1, edge_2: Edge objects to correlate
-            
-        Returns:
-            (signal_count: int, confidence: float)
-        """
         try:
             signals = 0
             confidence_sum = 0.0
@@ -151,19 +123,6 @@ class CorrelatorService:
     
     @staticmethod
     def group_edges_by_signals(db: Session, edges: list) -> dict:
-        """
-        Group edges by correlation signals (2-of-3 required).
-        
-        Args:
-            db: Database session
-            edges: List of Edge objects
-            
-        Returns:
-            {
-                group_id: [edges in group],
-                ...
-            }
-        """
         try:
             groups = {}
             
@@ -173,12 +132,10 @@ class CorrelatorService:
                 
                 # Try to match with existing groups
                 for group_id, group_edges in groups.items():
-                    # Check correlation with first edge in group
                     signals, confidence = CorrelatorService.count_correlation_signals(
                         db, edge, group_edges[0]
                     )
                     
-                    # Require 2+ signals
                     if signals >= CORRELATION_REQUIRE_SIGNALS and confidence > best_confidence:
                         best_group_id = group_id
                         best_confidence = confidence
@@ -186,11 +143,11 @@ class CorrelatorService:
                 # Add to best group or create new
                 if best_group_id:
                     groups[best_group_id].append(edge)
-                    logger.debug(f"📌 Added edge {edge.id} to group {best_group_id}")
+                    logger.debug(f"Added edge {edge.id} to group {best_group_id}")
                 else:
                     new_group_id = str(uuid.uuid4())[:8]
                     groups[new_group_id] = [edge]
-                    logger.debug(f"📌 Created group {new_group_id} with edge {edge.id}")
+                    logger.debug(f"Created group {new_group_id} with edge {edge.id}")
             
             logger.info(f"🔗 Grouped {len(edges)} edges into {len(groups)} incidents")
             return groups
@@ -201,18 +158,6 @@ class CorrelatorService:
     
     @staticmethod
     def create_incident_from_edges(db: Session, session_id: str, edges: list, severity: Severity) -> Incident:
-        """
-        Create incident from grouped edges.
-        
-        Args:
-            db: Database session
-            session_id: Unique session ID
-            edges: List of Edge objects in this incident
-            severity: Severity level
-            
-        Returns:
-            Incident object
-        """
         try:
             # Calculate confidence from signal count
             confidence = min(len(edges) / 10.0, 1.0)  # Confidence grows with chain length
@@ -249,15 +194,6 @@ class CorrelatorService:
     
     @staticmethod
     def determine_mitre_stage(edges: list) -> str:
-        """
-        Determine primary MITRE ATT&CK stage from edge types.
-        
-        Args:
-            edges: List of Edge objects
-            
-        Returns:
-            MITRE stage string
-        """
         try:
             # Count edge types
             edge_type_counts = {}
@@ -296,20 +232,6 @@ class CorrelatorService:
     
     @staticmethod
     def get_incident_chain(db: Session, incident_id: int) -> dict:
-        """
-        Get full incident chain: all nodes and edges.
-        
-        Args:
-            db: Database session
-            incident_id: Incident ID
-            
-        Returns:
-            {
-                "incident": Incident,
-                "nodes": [Node],
-                "edges": [Edge]
-            }
-        """
         try:
             incident = db.query(Incident).filter(Incident.id == incident_id).first()
             
@@ -341,10 +263,6 @@ class CorrelatorService:
     
     @staticmethod
     def upsert_incident_for_session(db: Session, session_id: str) -> Optional[Incident]:
-        """
-        Create or update an Incident for a given session_id based on current edges.
-        Triggered from Layer1 when a suspicious edge arrives.
-        """
         try:
             edges = db.query(Edge).filter(Edge.session_id == session_id).order_by(Edge.timestamp.asc()).all()
             if not edges:

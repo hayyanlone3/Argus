@@ -3,13 +3,8 @@ from datetime import datetime
 from typing import Optional, List
 from backend.shared.enums import NodeType, EdgeType, Severity, Status
 
-
-# ═══════════════════════════════════════════════════════════════
 # NODE SCHEMAS
-# ═══════════════════════════════════════════════════════════════
-
 class NodeCreate(BaseModel):
-    """Schema for creating a new node."""
     type: NodeType
     name: str
     path: Optional[str] = None
@@ -19,7 +14,6 @@ class NodeCreate(BaseModel):
 
 
 class NodeResponse(BaseModel):
-    """Schema for returning node data."""
     id: int
     type: NodeType
     name: str
@@ -33,11 +27,7 @@ class NodeResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
-# ═══════════════════════════════════════════════════════════════
 # EDGE SCHEMAS
-# ═══════════════════════════════════════════════════════════════
-
 class EdgeCreate(BaseModel):
     """Schema for creating a new edge."""
     source_id: int
@@ -74,11 +64,7 @@ class EdgeResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
-# ═══════════════════════════════════════════════════════════════
 # INCIDENT SCHEMAS
-# ═══════════════════════════════════════════════════════════════
-
 class IncidentCreate(BaseModel):
     """Schema for creating a new incident."""
     session_id: str
@@ -113,11 +99,7 @@ class IncidentResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
-# ═══════════════════════════════════════════════════════════════
 # QUARANTINE SCHEMAS
-# ═══════════════════════════════════════════════════════════════
-
 class QuarantineCreate(BaseModel):
     """Schema for quarantining a file."""
     original_path: str
@@ -151,11 +133,7 @@ class QuarantineResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
-# ═══════════════════════════════════════════════════════════════
 # WHITELIST SCHEMAS
-# ═══════════════════════════════════════════════════════════════
-
 class WhitelistCreate(BaseModel):
     """Schema for adding to whitelist."""
     tier: int = Field(..., ge=1, le=3)
@@ -178,11 +156,7 @@ class WhitelistResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
-# ═══════════════════════════════════════════════════════════════
 # FEEDBACK SCHEMAS
-# ═══════════════════════════════════════════════════════════════
-
 class FeedbackCreate(BaseModel):
     """Schema for submitting feedback."""
     feedback_type: str = Field(..., pattern="^(TP|FP|UNKNOWN)$")
@@ -200,11 +174,7 @@ class FeedbackResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
-# ═══════════════════════════════════════════════════════════════
 # VIRUSTOTAL CACHE SCHEMAS
-# ═══════════════════════════════════════════════════════════════
-
 class VTCacheCreate(BaseModel):
     """Schema for creating VT cache entry."""
     hash_sha256: str
@@ -220,11 +190,7 @@ class VTCacheResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
-# ═══════════════════════════════════════════════════════════════
 # POLICY SCHEMAS
-# ═══════════════════════════════════════════════════════════════
-
 class PolicyConfigOut(BaseModel):
     """Schema for returning policy config data."""
     auto_response_enabled: bool
@@ -242,11 +208,7 @@ class PolicyConfigUpdate(BaseModel):
     quarantine_on_warn: Optional[bool] = None
     min_final_score_incident: Optional[float] = None
 
-
-# ═══════════════════════════════════════════════════════════════
 # AGGREGATE RESPONSE SCHEMAS
-# ═══════════════════════════════════════════════════════════════
-
 class IncidentDetailResponse(BaseModel):
     """Schema for detailed incident response."""
     incident: IncidentResponse
@@ -267,3 +229,6 @@ class DashboardStatsResponse(BaseModel):
     false_positive_count: int
     mtti_average: Optional[float]
     model_maturity: float
+
+    class Config:
+        protected_namespaces = ()

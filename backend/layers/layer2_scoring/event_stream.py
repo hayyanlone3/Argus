@@ -42,18 +42,12 @@ def new_event_id(prefix: str = "evt") -> str:
     return f"{prefix}-{uuid.uuid4().hex[:16]}"
 
 def publish_event(evt: TelemetryEvent) -> None:
-    """
-    Non-blocking best-effort publish.
-    If queue is full, event is dropped to avoid blocking ingestion.
-    """
     try:
-        print(f"[COLLECTOR] Emitting event: {evt.kind}")
-        logger.info(f"🚀 [EVENT_STREAM] Publishing {evt.kind} (ID: {evt.event_id})")
         EVENT_QUEUE.put_nowait(evt)
         SCORING_QUEUE.put_nowait(evt)
         GRAPH_QUEUE.put_nowait(evt)
     except Exception as e:
-        print(f"  [EVENT_STREAM] Failed to publish: {e}")
+        logger.debug(f"[EVENT_STREAM] Failed to publish {evt.kind}: {e}")
 
 def to_dict(evt: TelemetryEvent) -> Dict[str, Any]:
     return asdict(evt)

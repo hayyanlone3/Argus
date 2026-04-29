@@ -1,8 +1,3 @@
-"""
-ML Predictor
-High-level interface for making predictions
-"""
-
 from typing import Dict, Any, Optional
 from backend.shared.logger import setup_logger
 from .model_loader import get_ml_loader
@@ -104,7 +99,6 @@ class MLPredictor:
     
     @staticmethod
     def predict_p_matrix_only(event_data: Dict[str, Any]) -> float:
-        """Predict using only P-Matrix model."""
         try:
             ml_loader = get_ml_loader()
             features_list, _ = MLPredictor.extract_features(event_data)
@@ -115,7 +109,6 @@ class MLPredictor:
     
     @staticmethod
     def predict_entropy_only(event_data: Dict[str, Any]) -> float:
-        """Predict using only Entropy model."""
         try:
             ml_loader = get_ml_loader()
             features_list, _ = MLPredictor.extract_features(event_data)
@@ -126,7 +119,6 @@ class MLPredictor:
     
     @staticmethod
     def predict_river_only(event_data: Dict[str, Any]) -> float:
-        """Predict using only River model."""
         try:
             ml_loader = get_ml_loader()
             _, features_dict = MLPredictor.extract_features(event_data)

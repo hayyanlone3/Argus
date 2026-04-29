@@ -55,7 +55,6 @@ export default function ModelMaturity() {
           </div>
           {percent < 100 && (
             <div className="mt-2 text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
-              Awaiting maturity threshold (14 days)
             </div>
           )}
         </div>
@@ -71,14 +70,6 @@ export default function ModelMaturity() {
               {progress?.status || 'Learning'}
             </p>
           </div>
-        </div>
-
-        <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 text-xs font-medium text-indigo-700 leading-relaxed shadow-sm">
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <span className="font-bold uppercase tracking-wide">Maturity Advisory</span>
-          </div>
-          The model reaches peak forensic accuracy after 14 days of baseline profiling. 
-          Current phase: <strong className="font-extrabold text-indigo-900">{progress?.days_deployed || 0} / 14 days</strong>.
         </div>
       </div>
     </div>

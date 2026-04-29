@@ -41,7 +41,6 @@ export default function IncidentDetail() {
   };
 
   const handleTerminate = async () => {
-    // Prefer PID from sysmon-backed edge metadata (Node.id is NOT an OS PID)
     const pid =
       (incidentData.edges || [])
         .map(e => e?.edge_metadata?.child_pid || e?.edge_metadata?.parent_pid)

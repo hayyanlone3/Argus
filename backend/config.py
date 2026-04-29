@@ -54,7 +54,9 @@ class Settings(BaseSettings):
     test_database_url: str = "sqlite:///./test.db"
     
     class Config:
-        env_file = ".env"
+        import os
+        # Find .env relative to this config file
+        env_file = os.path.join(os.path.dirname(__file__), ".env")
         case_sensitive = False
         # IMPORTANT: Allow extra fields from .env (like SERVICE_NAME)
         extra = "ignore"

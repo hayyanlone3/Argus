@@ -52,25 +52,21 @@ def init_db():
         session = SessionLocal()
         try:
             if not session.query(PolicyConfig).filter_by(id=1).first():
-                # Default to enabled in local/demo so suspicious activity auto-contains
+                # Default to DISABLED - user should enable via UI after review
                 policy = PolicyConfig(
                     id=1,
-                    auto_response_enabled=True,
-                    kill_on_alert=True,
-                    quarantine_on_warn=True,
+                    auto_response_enabled=False,
+                    kill_on_alert=False,
+                    quarantine_on_warn=False,
                     min_final_score_incident=0.5,
                 )
                 session.add(policy)
                 session.commit()
-                logger.info("  Default PolicyConfig initialized")
+                logger.info("  Default PolicyConfig initialized (auto-response DISABLED)")
             else:
-                # FORCE ENABLE for Demo
+                # Keep existing policy - don't override user settings
                 policy = session.query(PolicyConfig).filter_by(id=1).first()
-                policy.auto_response_enabled = True
-                policy.kill_on_alert = True
-                policy.quarantine_on_warn = True
-                session.commit()
-                logger.info("  PolicyConfig FORCE-ENABLED for demo")
+                logger.info(f"  Existing PolicyConfig loaded: auto_response={policy.auto_response_enabled}")
         except Exception as e:
             logger.error(f"  Error seeding default policy: {e}")
             session.rollback()

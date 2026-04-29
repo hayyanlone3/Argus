@@ -25,7 +25,7 @@ class GraphIngestionWorker:
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, name="GraphIngestionWorker", daemon=True)
         self._thread.start()
-        logger.info("   GraphIngestionWorker started - Synchronizing Provenance Graph...")
+        logger.info("GraphIngestionWorker started - Synchronizing Provenance Graph...")
 
     def stop(self):
         self._stop.set()
@@ -36,7 +36,9 @@ class GraphIngestionWorker:
         while not self._stop.is_set():
             try:
                 evt = GRAPH_QUEUE.get(timeout=1.0)
-                logger.info(f"  [INGESTION] Writing: {evt.kind}")
+                # Only log suspicious events to reduce noise
+                if evt.kind == "PROCESS_CREATE" and any(x in (evt.child_process or "").lower() for x in ["cmd.exe", "powershell", "wscript", "cscript"]):
+                    logger.debug(f"[INGESTION] Writing suspicious: {evt.kind} - {evt.child_process}")
             except:
                 continue
 
@@ -47,7 +49,9 @@ class GraphIngestionWorker:
                 finally:
                     db.close()
             except Exception:
-                logger.exception("  Graph Ingestion failed")
+                logger.exception("Graph Ingestion failed")
+                # Prevent rapid error loops
+                time.sleep(0.1)
 
     def _process_event(self, db, evt: TelemetryEvent):
         # 1. Ensure nodes exist

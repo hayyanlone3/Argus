@@ -10,7 +10,6 @@ from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, Optional
 
-# Suppress pydantic warnings
 warnings.filterwarnings("ignore", message="Field .* has conflict with protected namespace")
 
 from backend.shared.logger import setup_logger
@@ -43,7 +42,7 @@ def load_trained_river_model():
     if not RIVER_AVAILABLE:
         return False
     
-    model_path = "backend/ml/models/river_halfspacetrees_model.pkl"
+    model_path = "backend/ml/models/river_windows_baseline.pkl"  # Use Windows baseline
     
     try:
         import pickle
@@ -69,9 +68,8 @@ def load_trained_river_model():
         )
         return False
 
-# Load the trained model on startup
-if RIVER_AVAILABLE:
-    load_trained_river_model()
+# DO NOT load the trained model at import time - causes startup hang!
+# Model will be loaded lazily in Layer2RuntimeEngine._run() instead
 
 # In-memory latest results (safe start; DB persistence can come later)
 LATEST_DECISIONS: Dict[str, Dict[str, Any]] = {}  # event_id -> payload
@@ -109,7 +107,6 @@ def clamp01(x: float) -> float:
 
 
 def squash01(raw: float) -> float:
-    # logistic squashing to [0,1]
     try:
         return clamp01(1.0 / (1.0 + math.exp(-raw)))
     except Exception:
@@ -130,9 +127,6 @@ def is_suspicious_extension(path: Optional[str]) -> bool:
 
 # ---- Hashing ----
 def sha256_file(path: str, max_bytes: int = 50 * 1024 * 1024) -> Optional[str]:
-    """
-    Best-effort SHA256, capped to max_bytes to avoid heavy reads.
-    """
     try:
         if not path or not os.path.exists(path) or os.path.isdir(path):
             return None
@@ -198,8 +192,6 @@ def record_write(proc: str, ts: float, window_sec: float = 10.0) -> int:
             q.popleft()
         return len(q)
 
-
-# ---- Auto Response (Kill Process) ----
 def try_kill_pid(pid: Optional[str]) -> bool:
     if not pid:
         return False
@@ -221,6 +213,17 @@ def try_quarantine_path(
 ) -> Dict[str, Any]:
     if not original_path:
         return {"quarantined": False, "reason": "path_missing"}
+
+    safe_prefixes = [
+        "c:\\windows",
+        "c:\\program files",
+        "c:\\program files (x86)",
+        "d:\\applications",
+    ]
+    lower_path = original_path.lower()
+    for prefix in safe_prefixes:
+        if lower_path.startswith(prefix):
+            return {"quarantined": False, "reason": "protected_system_path"}
 
     if connection.SessionLocal is None:
         return {"quarantined": False, "reason": "db_not_initialized"}
@@ -263,8 +266,53 @@ def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
     score = 0.0
     reasons = []
 
-    # Layer A: Statistical Scoring (File & Registry Bursts + Process Entropy)
+    # Layer A: Statistical Scoring (File & Registry Bursts + Process Entropy + Command Line)
     if (evt.kind == "FILE_CREATE" and evt.target_path) or (evt.kind == "REG_SET") or (evt.kind == "PROCESS_CREATE" and evt.child_process):
+        
+        # 0. COMMAND LINE ANALYSIS (for PROCESS_CREATE)
+        if evt.kind == "PROCESS_CREATE" and evt.child_cmd:
+            cmd = (evt.child_cmd or "").lower()
+            
+            # Malicious PowerShell patterns
+            if "powershell" in (evt.child_process or "").lower():
+                if any(pattern in cmd for pattern in [
+                    "-executionpolicy bypass",
+                    "-exec bypass",
+                    "-ep bypass",
+                    "downloadstring",
+                    "downloadfile",
+                    "invoke-webrequest",
+                    "iwr",
+                    "wget",
+                    "curl",
+                    "invoke-expression",
+                    "iex",
+                    "frombase64string",
+                    "-encodedcommand",
+                    "-enc",
+                    "-windowstyle hidden",
+                    "-w hidden",
+                    "noprofile",
+                ]):
+                    score += 0.90
+                    reasons.append("malicious_powershell_pattern")
+            
+            # Malicious cmd patterns
+            if "cmd.exe" in (evt.child_process or "").lower():
+                if any(pattern in cmd for pattern in [
+                    "whoami",
+                    "net user",
+                    "net localgroup",
+                    "tasklist",
+                    "systeminfo",
+                    "ipconfig /all",
+                    "netstat",
+                    "reg query",
+                    "reg add",
+                ]):
+                    score += 0.70
+                    reasons.append("reconnaissance_command")
+        
         # 1. Entropy (File Only & Process Launch)
         file_to_check = evt.target_path if evt.kind == "FILE_CREATE" else (evt.child_process if evt.kind == "PROCESS_CREATE" else None)
         
@@ -288,7 +336,7 @@ def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
             window = float(os.getenv("ARGUS_BURST_WINDOW", "10.0"))
             rate = record_write(evt.child_process or "system", evt.ts, window_sec=window)
             
-            burst_threshold = 3 if evt.kind == "REG_SET" else 5
+            burst_threshold = 30 if evt.kind == "REG_SET" else 50
             if rate >= burst_threshold:
                 score += 0.95
                 reasons.append(f"behavioral_burst_{evt.kind}={rate}")
@@ -305,6 +353,7 @@ class PMatrixModel:
         self.counts = {}          # (parent, child) -> count
         self.parent_totals = {}   # parent -> total outgoing
         self.vocab_children = set()
+        self.min_observations = int(os.getenv("PMATRIX_MIN_OBSERVATIONS", "10"))
 
     def update_and_score(self, parent: str, child: str) -> float:
         parent = (parent or "").lower()
@@ -322,6 +371,13 @@ class PMatrixModel:
             total = self.parent_totals[parent]
             V = max(1, len(self.vocab_children))
 
+            if total < self.min_observations:
+                # Reduce score during learning phase
+                warmup_factor = total / self.min_observations
+                prob = (c + 1.0) / (total + V)
+                rarity = 1.0 - prob
+                return clamp01(rarity * warmup_factor)
+            
             prob = (c + 1.0) / (total + V)
             rarity = 1.0 - prob
             return clamp01(rarity)
@@ -335,37 +391,90 @@ def score_layer_b(evt: TelemetryEvent) -> Dict[str, Any]:
     parent = (evt.parent_process or "").lower()
     child = (evt.child_process or "").lower()
     
-    # WHITELIST: Don't flag legitimate applications
-    legitimate_apps = [
-        "kiro.exe", "notepad.exe", "explorer.exe", "chrome.exe", 
-        "firefox.exe", "code.exe", "devenv.exe", "winrar.exe"
-    ]
-    
     parent_name = parent.split("\\")[-1] if "\\" in parent else parent
     child_name = child.split("\\")[-1] if "\\" in child else child
     
-    # If both parent and child are legitimate, reduce score significantly
-    if any(app in parent_name for app in legitimate_apps) and any(app in child_name for app in legitimate_apps):
-        return {"score": 0.1, "reasons": ["legitimate_application"]}
+    # Trusted system paths - reduce score significantly
+    trusted_paths = [
+        "c:\\windows\\system32",
+        "c:\\windows\\syswow64",
+        "c:\\program files",
+        "c:\\program files (x86)",
+    ]
     
-    # If same executable spawning itself, it's usually legitimate (like Kiro.exe -> Kiro.exe)
+    child_is_trusted = any(child.startswith(path) for path in trusted_paths)
+    parent_is_trusted = any(parent.startswith(path) for path in trusted_paths)
+    
+    # CRITICAL FIX: Only reduce score if BOTH are trusted AND it's a common spawn
+    # Unusual spawns (notepad → cmd, calc → notepad) should still be flagged!
+    common_system_spawns = [
+        ("explorer.exe", "notepad.exe"),
+        ("explorer.exe", "calc.exe"),
+        ("svchost.exe", "dllhost.exe"),
+        ("services.exe", "svchost.exe"),
+    ]
+    
+    is_common_spawn = any(
+        parent_name == p and child_name == c 
+        for p, c in common_system_spawns
+    )
+    
+    # Only give low score if it's a known common system spawn
+    if child_is_trusted and parent_is_trusted and is_common_spawn:
+        return {"score": 0.05, "reasons": ["trusted_system_path"]}
+    
+    # Self-spawn is usually legitimate
     if parent_name == child_name:
-        return {"score": 0.2, "reasons": ["self_spawn"]}
+        return {"score": 0.1, "reasons": ["self_spawn"]}
 
     s = P_MATRIX.update_and_score(parent, child)
     
-    # Reduce score for legitimate processes but keep some sensitivity
-    if any(app in child_name for app in legitimate_apps):
-        s = s * 0.6  # Reduce by 40% (less aggressive than before)
-    
+    # Reduce score for trusted child processes (only if common spawn)
+    if child_is_trusted and is_common_spawn:
+        s = s * 0.3
+        
     reasons = []
+    
+    # BOOST SCORE for highly unusual spawns
+    # Examples: notepad → cmd, calc → anything, malware.exe → calc
+    unusual_parents = ["notepad.exe", "calc.exe", "mspaint.exe", "wordpad.exe"]
+    lolbins = ["cmd.exe", "powershell.exe", "wscript.exe", "cscript.exe", "mshta.exe"]
+    
+    if any(up in parent_name for up in unusual_parents):
+        if any(lb in child_name for lb in lolbins):
+            s = max(s, 0.85)  # Force high score for unusual parent → LOLBin
+            reasons.append("unusual_parent_to_lolbin")
+        else:
+            s = max(s, 0.70)  # Force medium-high score for unusual parent
+            reasons.append("unusual_parent_spawn")
+    
+    # BOOST for unknown parent (not in system paths)
+    if not parent_is_trusted and any(lb in child_name for lb in lolbins):
+        s = max(s, 0.80)  # Unknown process spawning LOLBin
+        reasons.append("unknown_parent_to_lolbin")
+    
+    # CRITICAL: Check command line for malicious patterns
+    # Even if spawn is common (cmd → powershell), malicious command = high score
+    cmd = (evt.child_cmd or "").lower()
+    if cmd and any(lb in child_name for lb in lolbins):
+        malicious_patterns = [
+            "-executionpolicy bypass", "-exec bypass", "-ep bypass",
+            "downloadstring", "downloadfile", "invoke-webrequest",
+            "invoke-expression", "iex", "frombase64string",
+            "-encodedcommand", "-enc", "-windowstyle hidden",
+            "whoami", "net user", "net localgroup", "reg query", "reg add"
+        ]
+        if any(pattern in cmd for pattern in malicious_patterns):
+            s = max(s, 0.85)  # Force high score for malicious command
+            reasons.append("malicious_command_line")
+    
     if s >= 0.7:
-        reasons.append("rare_transition")
+        if "rare_transition" not in reasons:
+            reasons.append("rare_transition")
     return {"score": s, "reasons": reasons}
 
 # Layer C: Online ML
 def layer_c_features(evt: TelemetryEvent, a_score: float, b_score: float) -> Dict[str, float]:
-    """Enhanced feature extraction for better malware detection."""
     
     kind = evt.kind or ""
     child = (evt.child_process or "").lower()
@@ -387,24 +496,27 @@ def layer_c_features(evt: TelemetryEvent, a_score: float, b_score: float) -> Dic
         "entropy": float(evt.file_entropy or 0.0),
     })
     
-    # Enhanced process-based features
+    # Command line analysis (calculate first)
+    cmd = (evt.child_cmd or "").lower()
     features.update({
-        "child_is_cmd": 1.0 if "cmd.exe" in child else 0.0,
-        "child_is_powershell": 1.0 if "powershell" in child else 0.0,
+        "cmd_has_base64": 1.0 if any(x in cmd for x in ["-enc", "base64", "frombase64"]) else 0.0,
+        "cmd_has_download": 1.0 if any(x in cmd for x in ["downloadstring", "wget", "curl", "invoke-webrequest"]) else 0.0,
+        "cmd_has_bypass": 1.0 if any(x in cmd for x in ["bypass", "unrestricted", "hidden", "windowstyle"]) else 0.0,
+        "cmd_length": min(len(cmd) / 100.0, 10.0),
+    })
+
+    is_lolbin = ("powershell" in child) or ("cmd" in child)
+    is_susp_cmd = (features["cmd_has_base64"] or features["cmd_has_download"] or features["cmd_has_bypass"] or features["cmd_length"] > 1.5)
+    
+    features.update({
+        "is_suspicious_lolbin": 1.0 if is_lolbin and is_susp_cmd else 0.0,
+        "child_is_cmd": 1.0 if "cmd.exe" in child and is_susp_cmd else 0.0,
+        "child_is_powershell": 1.0 if "powershell" in child and is_susp_cmd else 0.0,
         "child_is_system32": 1.0 if "system32" in child else 0.0,
         "parent_is_explorer": 1.0 if "explorer.exe" in parent else 0.0,
         "parent_is_system": 1.0 if any(x in parent for x in ["system32", "windows"]) else 0.0,
     })
     
-    # Command line analysis (new - important for malware detection)
-    features.update({
-        "cmd_has_base64": 1.0 if any(x in cmd for x in ["-enc", "base64", "frombase64"]) else 0.0,
-        "cmd_has_download": 1.0 if any(x in cmd for x in ["downloadstring", "wget", "curl", "invoke-webrequest"]) else 0.0,
-        "cmd_has_bypass": 1.0 if any(x in cmd for x in ["bypass", "unrestricted", "hidden", "windowstyle"]) else 0.0,
-        "cmd_length": min(len(cmd) / 100.0, 10.0),  # Normalized command length
-    })
-    
-    # Path-based risk features
     features.update({
         "path_is_temp": 1.0 if any(x in target_path for x in ["temp", "tmp"]) else 0.0,
         "path_is_appdata": 1.0 if "appdata" in target_path else 0.0,
@@ -425,7 +537,6 @@ def layer_c_features(evt: TelemetryEvent, a_score: float, b_score: float) -> Dic
     features.update({
         "combined_risk": min((a_score + b_score + (entropy / 8.0)) / 3.0, 1.0),
         "is_high_risk_combo": 1.0 if (a_score > 0.7 and entropy > 7.0) else 0.0,
-        "is_lolbin_execution": 1.0 if (features["child_is_cmd"] or features["child_is_powershell"]) and not features["parent_is_system"] else 0.0,
     })
     
     return features
@@ -443,44 +554,61 @@ def score_layer_c(evt: TelemetryEvent, a_score: float, b_score: float) -> Dict[s
     child_name = child.split("\\")[-1] if "\\" in child else child
     
     legitimate_apps = [
-        "kiro.exe", "notepad.exe", "explorer.exe", "chrome.exe", 
-        "firefox.exe", "code.exe", "devenv.exe", "winrar.exe"
+        # System processes
+        "svchost.exe", "csrss.exe", "smss.exe", "wininit.exe",
+        "services.exe", "lsass.exe", "spoolsv.exe", "conhost.exe",
+        "dwm.exe", "winlogon.exe", "taskmgr.exe", "taskhost.exe",
+        
+        # Common applications
+        "explorer.exe", "notepad.exe", "notepad++.exe",
+        
+        # Browsers
+        "chrome.exe", "firefox.exe", "msedge.exe", "brave.exe", 
+        "opera.exe", "iexplore.exe",
+        
+        # Development tools
+        "code.exe", "devenv.exe", "kiro.exe", "git.exe", 
+        "node.exe", "npm.exe", "python.exe", "java.exe",
+        
+        # Communication
+        "slack.exe", "teams.exe", "zoom.exe", "discord.exe",
+        "skype.exe", "outlook.exe",
+        
+        # Utilities
+        "winrar.exe", "7z.exe", "winzip.exe", "vlc.exe",
+        "spotify.exe", "steam.exe",
+        
+        # Database & Servers
+        "postgres.exe", "mysqld.exe", "mongod.exe", "redis-server.exe",
     ]
     
     is_legitimate = any(app in child_name for app in legitimate_apps)
 
     with _ML_LOCK:
         try:
-            # Get River anomaly score from trained BETH model
             raw_river = float(_ML_MODEL.score_one(feats))
             
-            # Use trained model score with mathematical layers
-            # Apply squashing to convert raw score to probability
-            river_contribution = squash01(raw_river)
+            river_contribution = clamp01(raw_river)
+
+            math_avg = (a_score + b_score) / 2.0
+            final_score = math_avg * 0.6 + river_contribution * 0.4
             
-            # Hybrid scoring: Mathematical + Trained ML
-            final_score = (a_score + b_score) * 0.6 + river_contribution * 0.4
-            
-            # WHITELIST: Reduce score for legitimate apps
-            if is_legitimate:
-                final_score = final_score * 0.5  # Reduce by 50%
-            
-            # Continue online learning (model adapts to new data)
             _ML_MODEL.learn_one(feats)
             _ML_SEEN += 1
             
         except Exception as e:
-            final_score = (a_score + b_score) * 0.5  # Fallback to math only
+            final_score = (a_score + b_score) / 2.0
             raw_river = 0.0
             river_contribution = 0.0
 
-    # Clamp final score
     final_score = clamp01(final_score)
     
-    # Determine reasons based on actual behavior
-    reasons = ["trained_beth_model"]
+    reasons = ["windows_baseline_model"]
+    
+    # WHITELIST: Reduce score for legitimate processes
     if is_legitimate:
-        reasons.append("legitimate_process")
+        final_score = final_score * 0.5  # 50% reduction for known legitimate apps
+        reasons.append("legitimate_process_reduction")
         
     if final_score > 0.8:
         reasons.append("high_risk_detected")
@@ -488,13 +616,12 @@ def score_layer_c(evt: TelemetryEvent, a_score: float, b_score: float) -> Dict[s
         reasons.append("moderate_risk")
     else:
         reasons.append("low_risk")
-        reasons.append("low_risk")
     
     # Add specific detection reasons
     if feats.get("is_high_risk_combo", 0.0) > 0.5:
         reasons.append("high_entropy_with_math_scores")
-    if feats.get("is_lolbin_execution", 0.0) > 0.5:
-        reasons.append("lolbin_execution")
+    if feats.get("is_suspicious_lolbin", 0.0) > 0.5:
+        reasons.append("suspicious_lolbin_execution")
     if feats.get("cmd_has_base64", 0.0) > 0.5:
         reasons.append("base64_encoding")
     
@@ -504,22 +631,35 @@ def score_layer_c(evt: TelemetryEvent, a_score: float, b_score: float) -> Dict[s
         "raw_river": raw_river,
         "river_contribution": river_contribution,
         "seen": _ML_SEEN,
-        "model_type": "trained_beth_model"
+        "model_type": "windows_baseline_model"
     }
 
 # Fusion
 def fuse(a: float, b: float, c: float) -> Dict[str, Any]:
     a, b, c = clamp01(a), clamp01(b), clamp01(c)
 
-    # BALANCED: More selective override rule but not too aggressive
-    if b > 0.90 and c > 0.75 and a > 0.3:  # Require some entropy/burst activity
-        return {"decision": "MALWARE ALERT", "final_score": 1.0, "rule": "high_confidence_override"}
+    # Get thresholds from environment (configurable to reduce false positives)
+    override_a = float(os.getenv("FUSION_OVERRIDE_A_THRESHOLD", "0.80"))  # Lowered from 0.90
+    override_b = float(os.getenv("FUSION_OVERRIDE_B_THRESHOLD", "0.85"))  # Lowered from 0.98
+    override_c = float(os.getenv("FUSION_OVERRIDE_C_THRESHOLD", "0.80"))  # Lowered from 0.95
+    
+    malware_threshold = float(os.getenv("FUSION_MALWARE_THRESHOLD", "0.85"))  # Lowered from 0.95
+    suspicious_threshold = float(os.getenv("FUSION_SUSPICIOUS_THRESHOLD", "0.65"))  # Lowered from 0.75
+
+    # HIGH CONFIDENCE OVERRIDE: All 3 channels must agree VERY strongly
+    if b > override_b and c > override_c and a > override_a:
+        return {"decision": "MALWARE ALERT", "final_score": 1.0, "rule": "triple_high_override"}
 
     final = 0.4 * a + 0.3 * b + 0.3 * c
+    
+    # BOOST: If both A and B agree strongly (even without C), increase confidence
+    if a >= 0.70 and b >= 0.70:
+        boost = min(0.15, (a + b) / 10)  # Up to +0.15 boost
+        final = min(final + boost, 1.0)
 
-    if final >= 0.80:  # Restore higher threshold for malware
+    if final >= malware_threshold:
         dec = "MALWARE ALERT"
-    elif final >= 0.55:  # Balanced suspicious threshold
+    elif final >= suspicious_threshold:
         dec = "SUSPICIOUS"
     else:
         dec = "NORMAL"
@@ -569,13 +709,19 @@ class Layer2RuntimeEngine:
         logger.info("Layer2RuntimeEngine stopped")
 
     def _run(self):
-        global _ML_SEEN, _POLICY_LAST_REFRESH, _POLICY_CACHE
+        global _ML_SEEN, _POLICY_LAST_REFRESH, _POLICY_CACHE, _ML_MODEL
 
         warmup = int(os.getenv("ARGUS_ML_WARMUP_EVENTS", "500"))
 
         # fast path thresholds (immediate containment without waiting for ML warmup)
         fast_a = float(os.getenv("ARGUS_FAST_A_ALERT", "0.85"))
         fast_b = float(os.getenv("ARGUS_FAST_B_ALERT", "0.90"))
+        fast_river = float(os.getenv("ARGUS_FAST_RIVER_ALERT", "0.90"))  # River fast-path
+
+        # LAZY LOAD: Load ML model on first engine run (not at import time to avoid startup hang)
+        if RIVER_AVAILABLE and _ML_MODEL is None:
+            logger.info("Loading ML model on first run (lazy initialization)...")
+            load_trained_river_model()
 
         while not self._stop.is_set():
             
@@ -592,8 +738,22 @@ class Layer2RuntimeEngine:
 
             try:
                 evt: TelemetryEvent = SCORING_QUEUE.get(timeout=0.5)
-                logger.warning(f"[ENGINE] Processing: {evt.kind} for {evt.session_id}")
-            except Exception:
+                
+                # FORCE LOG EVERY EVENT
+                logger.info(f"[DEBUG] ===== EVENT RECEIVED =====")
+                logger.info(f"[DEBUG] Kind: {evt.kind}")
+                logger.info(f"[DEBUG] Child: {evt.child_process}")
+                logger.info(f"[DEBUG] Parent: {evt.parent_process}")
+                logger.info(f"[DEBUG] Cmd: {evt.child_cmd[:100] if evt.child_cmd else 'None'}")
+                logger.info(f"[DEBUG] PID: {evt.child_pid}")
+                
+                # Only log high-priority events to reduce noise
+                if evt.kind in ["PROCESS_CREATE"] and any(x in (evt.child_process or "").lower() for x in ["cmd.exe", "powershell", "wscript", "cscript"]):
+                    logger.info(f"[ENGINE] Processing suspicious: {evt.kind} - {evt.child_process}")
+            except Exception as e:
+                # Don't silently ignore - log the error!
+                if "timed out" not in str(e).lower():
+                    logger.error(f"[ENGINE] Error getting event from queue: {e}")
                 continue
 
             try:
@@ -665,6 +825,25 @@ class Layer2RuntimeEngine:
 
                 fused = fuse(a["score"], b["score"], c["score"])
                 
+                # Debug logging for all scored events (helps tune thresholds)
+                if a["score"] > 0.3 or b["score"] > 0.3 or c["score"] > 0.3:
+                    logger.info(f"[SCORING] {evt.kind} | {evt.child_process or evt.target_path}")
+                    logger.info(f"   Layers: A={a['score']:.2f}, B={b['score']:.2f}, C={c['score']:.2f}")
+                    logger.info(f"   Final: {fused.get('final_score'):.3f} → {fused.get('decision')}")
+                
+                # Enhanced logging for malware detection
+                if fused.get("decision") == "MALWARE ALERT":
+                    logger.error(f"🚨 MALWARE ALERT DETECTED!")
+                    logger.error(f"   Process: {evt.child_process or evt.target_path}")
+                    logger.error(f"   Session: {evt.session_id}")
+                    logger.error(f"   Score: {fused.get('final_score'):.3f}")
+                    logger.error(f"   Layers: A={a['score']:.2f}, B={b['score']:.2f}, C={c['score']:.2f}")
+                elif fused.get("decision") == "SUSPICIOUS":
+                    logger.warning(f"⚠️  SUSPICIOUS activity detected")
+                    logger.warning(f"   Process: {evt.child_process or evt.target_path}")
+                    logger.warning(f"   Session: {evt.session_id}")
+                    logger.warning(f"   Score: {fused.get('final_score'):.3f}")
+                
                 # Apply Layer 0 overrides to fusion score/decision
                 if layer0_result:
                     fused["layer0"] = layer0_result
@@ -681,10 +860,11 @@ class Layer2RuntimeEngine:
                         fused["final_score"] = max(float(fused.get("final_score", 0.0)), 0.50)
                         fused["rule"] = str(fused.get("rule", "")) + " + layer0_warn_override"
 
-                # Remove tactical logging noise
-                # if fused.get("final_score", 0) > 0.3:
-                #     print(f"\n[!] ARGUS DETECTION: {evt.kind} | Score: {fused.get('final_score')} | Decision: {fused.get('decision')}")
-                #     print(f"[!] Reasons: {a['reasons'] + b['reasons'] + c['reasons']}")
+                # Only log significant detections to reduce noise
+                if fused.get("final_score", 0) > 0.5:
+                    logger.warning(f"[DETECTION] {evt.kind} | Score: {fused.get('final_score')} | Decision: {fused.get('decision')} | Process: {evt.child_process or evt.target_path}")
+                    if fused.get("final_score", 0) > 0.7:
+                        logger.warning(f"[REASONS] {a['reasons'] + b['reasons'] + c['reasons']}")
                 
                 # Auto-response logic
                 ml_ready = (not RIVER_AVAILABLE) or (_ML_MODEL is None) or (_ML_SEEN >= warmup)
@@ -695,76 +875,143 @@ class Layer2RuntimeEngine:
                 fast_path = False
                 fast_reason = None
                 
-                if a["score"] >= fast_a:
-                    fast_path = True
+                if fused.get("decision") == "MALWARE ALERT":
                     should_kill = True
-                    fast_reason = "fast_path_A_high"
+                    fast_reason = "fusion_malware_alert"
                 
-                # LAYER 0 OVERRIDE: If Bouncer says CRITICAL, WE KILL IMMEDIATELY
+                river_score = c.get("raw_river", 0.0)
+                
                 if layer0_result and layer0_result.get("decision", {}).get("status") in ("CRITICAL", "BLOCK"):
                     should_kill = True
                     fast_path = True
                     fast_reason = "layer0_security_override"
-                
-                # FORCE KILL for Behavior Bursts (Override ML Warmup)
-                if (evt.kind in ("REG_SET", "FILE_CREATE")) and a["score"] >= 0.8:
-                    should_kill = True
-                    fast_path = True
-                    fast_reason = f"{evt.kind}_burst_override"
 
-                # DEMO MODE: Force-enable response for high-fidelity demonstration
-                is_auto_response = True
-                is_kill_enabled = True
-                is_quarantine_enabled = True
+                is_auto_response = policy.get("auto_response_enabled", False)
+                is_kill_enabled = policy.get("kill_on_alert", False)
+                is_quarantine_enabled = policy.get("quarantine_on_warn", True)
                 
+                # OPTION 2: Enable Quarantine + Suspend (Recommended)
+                # Processes will be SUSPENDED (not killed)
+                # Files will be QUARANTINED
+                # IDE/Terminal processes are PROTECTED
+                is_kill_enabled = True  # Enable (uses suspend, not kill)
+                is_quarantine_enabled = True  # Enable quarantine
+                
+                logger.info(f"[AUTO-RESPONSE] Quarantine + Suspend ENABLED - Malware will be suspended and quarantined")
+                
+                # CRITICAL: Never auto-kill in development/testing environments
+                # Auto-kill is DISABLED by default for safety
+                # Only enable in production with careful testing
+                
+                # WHITELIST: Never auto-kill critical system processes
+                safe_processes = [
+                    "explorer.exe", "svchost.exe", "csrss.exe", "smss.exe", 
+                    "wininit.exe", "services.exe", "lsass.exe", "spoolsv.exe", 
+                    "conhost.exe", "winlogon.exe", "taskmgr.exe",
+                    "python.exe", "postgres.exe", "node.exe", "chrome.exe",
+                    "firefox.exe", "code.exe", "kiro.exe"
+                ]
+                
+                # WHITELIST: Never kill shells spawned by development tools
+                safe_parent_processes = [
+                    "code.exe", "kiro.exe", "devenv.exe", "pycharm",
+                    "idea", "webstorm", "rider", "goland",
+                    "windowsterminal.exe", "conhost.exe"
+                ]
+                
+                child_name = (evt.child_process or "").split("\\")[-1].lower()
+                parent_name = (evt.parent_process or "").split("\\")[-1].lower()
+                
+                # Check if child is protected
+                if child_name in safe_processes or any(app in child_name for app in safe_processes):
+                    if should_kill:
+                        logger.warning(f"🛡️  Protected process {child_name} flagged for kill but was spared.")
+                    should_kill = False
+                
+                # Check if parent is a development tool (CRITICAL FIX)
+                if any(safe_parent in parent_name for safe_parent in safe_parent_processes):
+                    if should_kill:
+                        logger.warning(f"🛡️  Process spawned by IDE/terminal ({parent_name}) was spared from kill.")
+                    should_kill = False
+
+                # Protect VS Code terminal integration
+                child_cmd_lower = (evt.child_cmd or "").lower()
+                if child_name in ["powershell.exe", "pwsh.exe", "cmd.exe"]:
+                    if "vscode" in child_cmd_lower or "shellintegration" in child_cmd_lower or "kiro" in child_cmd_lower:
+                        if should_kill:
+                            logger.warning("🛡️  Protected IDE terminal shell from being killed.")
+                        should_kill = False
+                
+                # SAFETY: Log kill attempts for review
+                if should_kill:
+                    logger.error(f"⚠️  AUTO-RESPONSE TRIGGERED: Process={child_name}, PID={evt.child_pid}, Parent={parent_name}")
+                    logger.error(f"   Command: {evt.child_cmd[:100] if evt.child_cmd else 'N/A'}")
+                    logger.error(f"   Score: {fused.get('final_score')}, Decision: {fused.get('decision')}")
+
+                # IMPROVED: Suspend + Quarantine instead of Kill
+                suspended = False
                 if is_kill_enabled and should_kill:
                     pid = evt.child_pid
                     if pid:
-                        # print(f"[AUTO-RESPONSE] CRITICAL THREAT DETECTED. KILLING PID {pid}...")
                         try:
-                            killed = IsolationService.kill_process(int(pid), force=True)
-                            # if killed: print(f"[SUCCESS] PID {pid} HAS BEEN TERMINATED.")
+                            # SUSPEND the process first (safer than kill)
+                            logger.error(f"🛑 SUSPENDING PROCESS: {child_name} (PID={pid})")
+                            suspended = IsolationService.suspend_process(int(pid))
+                            
+                            if suspended:
+                                logger.error(f"✅ Process SUSPENDED successfully: {child_name} (PID={pid})")
+                                logger.info(f"   Process can be resumed with: IsolationService.resume_process({pid})")
+                            else:
+                                logger.error(f"❌ Failed to suspend process: {child_name} (PID={pid})")
+                                # Fallback to kill only if suspend fails AND it's critical
+                                if fused.get("final_score", 0) >= 0.95:
+                                    logger.error(f"⚠️  CRITICAL THREAT - Attempting to KILL process")
+                                    killed = IsolationService.kill_process(int(pid), force=True)
+                                    if killed:
+                                        logger.error(f"✅ Process KILLED: {child_name} (PID={pid})")
+                                    else:
+                                        logger.error(f"❌ Failed to kill process: {child_name} (PID={pid})")
                         except Exception as k_ex:
                             err = str(k_ex)
-                            # print(f"  [ERROR] Could not kill PID {pid}: {err}")
+                            logger.error(f"❌ Exception during auto-response: {k_ex}")
                     else:
                          err = "pid_missing"
-                         # print("[AUTO-RESPONSE] Kill triggered but PID was missing.")
+                         logger.error(f"❌ Cannot suspend/kill process: PID missing")
 
                 quarantine_result = {"quarantined": False, "reason": "not_attempted"}
                 
                 if is_quarantine_enabled:
-                    # Target both the explicit file manipulation (target_path) 
-                    # and the source executable (child_process)
                     paths_to_check = []
                     if evt.target_path: paths_to_check.append(evt.target_path)
                     
-                    # Only try to quarantine the source process if it's not a protected system binary
                     if evt.child_process and "system32" not in evt.child_process.lower(): 
                         paths_to_check.append(evt.child_process)
 
+                    # Only quarantine on HIGH confidence MALWARE_ALERT
                     for path in paths_to_check:
-                        if should_kill:
+                        if fused.get("decision") == "MALWARE ALERT" and fused.get("final_score", 0) >= 0.85:
                             res = try_quarantine_path(
                                 original_path=path,
                                 detection_layer="Layer2_Containment",
-                                confidence=1.0 if fused.get("decision") == "MALWARE ALERT" else 0.8,
+                                confidence=fused.get("final_score", 0.8),
                                 session_id=evt.session_id,
                                 mitre_stage=None,
                             )
                             if res.get("quarantined"):
                                 quarantine_result = res
-                    # Or if Layer 0 Bouncer explicitly flags it
+                                break
+
+                    # Layer0 override only on CRITICAL (not WARN)
                     if not quarantine_result.get("quarantined") and (
                         layer0_result 
-                        and layer0_result.get("decision", {}).get("status") in ("WARN", "CRITICAL", "BLOCK") 
+                        and layer0_result.get("decision", {}).get("status") == "CRITICAL"
                         and evt.target_path 
                         and is_suspicious_extension(evt.target_path)
                     ):
                          quarantine_result = try_quarantine_path(
                             original_path=evt.target_path,
                             detection_layer="Layer0_Bouncer",
-                            confidence=0.85 if layer0_result.get("decision", {}).get("status") == "WARN" else 0.95,
+                            confidence=0.95,
                             session_id=evt.session_id,
                             mitre_stage=None,
                         )
@@ -800,46 +1047,77 @@ class Layer2RuntimeEngine:
                         for k in list(LATEST_DECISIONS.keys())[:500]:
                             LATEST_DECISIONS.pop(k, None)
 
-                # CREATE INCIDENT FOR LAYER 5 LEARNING
+                # CREATE OR UPDATE INCIDENT FOR LAYER 5 LEARNING
                 if connection.SessionLocal is not None and fused.get("final_score", 0) >= policy.get("min_final_score_incident", 0.5):
                     try:
-                        from backend.database.models import Incident, IncidentSeverity
+                        from backend.database.models import Incident
+                        from backend.shared.enums import Severity
                         
                         db = connection.SessionLocal()
                         
                         # Determine severity based on decision
                         if fused.get("decision") == "MALWARE ALERT":
-                            severity = IncidentSeverity.CRITICAL
+                            severity = Severity.CRITICAL
                         elif fused.get("decision") == "SUSPICIOUS":
-                            severity = IncidentSeverity.WARNING
+                            severity = Severity.WARNING
                         else:
-                            severity = IncidentSeverity.UNKNOWN
+                            severity = Severity.UNKNOWN
                         
-                        # Create incident record for Layer 5 Learning
-                        incident = Incident(
-                            session_id=evt.session_id,
-                            event_id=evt.event_id,
-                            severity=severity,
-                            confidence=float(fused.get("final_score", 0)),
-                            mitre_stage=None,  # Could be enhanced later
-                            description=f"{evt.kind}: {evt.child_process or evt.target_path}",
-                            detection_layer="Layer2_Fusion",
-                            raw_data=payload
-                        )
+                        # Check if incident already exists for this session
+                        existing_incident = db.query(Incident).filter(Incident.session_id == evt.session_id).first()
                         
-                        db.add(incident)
-                        db.commit()
+                        if existing_incident:
+                            # Update existing incident if new severity is higher or confidence increased
+                            severity_order = {"BENIGN": 0, "UNKNOWN": 1, "WARNING": 2, "CRITICAL": 3}
+                            current_severity_level = severity_order.get(existing_incident.severity.value, 0)
+                            new_severity_level = severity_order.get(severity.value, 0)
+                            
+                            if new_severity_level > current_severity_level:
+                                existing_incident.severity = severity
+                                logger.warning(f"🔺 Escalated incident {evt.session_id}: {existing_incident.severity.value} → {severity.value}")
+                            
+                            # Always update confidence to latest score
+                            new_confidence = float(fused.get("final_score", 0))
+                            if new_confidence > existing_incident.confidence:
+                                existing_incident.confidence = new_confidence
+                            
+                            # Update narrative with latest event
+                            existing_incident.narrative = f"{existing_incident.narrative}\n{evt.kind}: {evt.child_process or evt.target_path}"
+                            
+                            db.commit()
+                            logger.info(f"✏️  Updated incident: {evt.session_id} (confidence={new_confidence:.2f})")
+                        else:
+                            # Create new incident record
+                            incident = Incident(
+                                session_id=evt.session_id,
+                                confidence=float(fused.get("final_score", 0)),
+                                severity=severity,
+                                mitre_stage=None,
+                                narrative=f"{evt.kind}: {evt.child_process or evt.target_path}",
+                            )
+                            
+                            db.add(incident)
+                            db.commit()
+                            logger.warning(f"🚨 Created incident: {evt.session_id} ({severity.value}, confidence={incident.confidence:.2f})")
                         
                     except Exception as incident_error:
-                        logger.error(f"Failed to create incident: {incident_error}")
+                        logger.error(f"❌ Failed to create/update incident: {incident_error}")
                         if 'db' in locals():
-                            db.rollback()
+                            try:
+                                db.rollback()
+                            except:
+                                pass
                     finally:
                         if 'db' in locals():
-                            db.close()
+                            try:
+                                db.close()
+                            except:
+                                pass
 
             except Exception:
-                logger.exception("  Layer2RuntimeEngine event processing failed")
+                logger.exception("Layer2RuntimeEngine event processing failed")
+                # Prevent rapid error loops
+                time.sleep(0.1)
 
 
 

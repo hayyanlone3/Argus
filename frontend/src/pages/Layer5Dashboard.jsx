@@ -13,16 +13,11 @@ export default function Layer5Dashboard() {
         <p className="text-gray-600">Continuous model improvement via weekly retraining and feedback</p>
       </div>
 
-      {/* Key Components */}
       <div className="max-w-3xl mx-auto space-y-8 py-4">
         <ModelMaturity />
         <RetrainingLog />
       </div>
-
-      {/* False Positive Rate */}
       <FPRateChart />
-
-
       </div>
   );
 }

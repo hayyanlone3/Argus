@@ -194,7 +194,7 @@ def is_known_packer(file_path: str) -> bool:
         
         for packer in KNOWN_PACKERS:
             if packer.encode() in data:
-                logger.debug(f"📦 Known packer detected: {packer}")
+                logger.debug(f"  Known packer detected: {packer}")
                 return True
         
         return False

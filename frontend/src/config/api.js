@@ -17,7 +17,7 @@ const DEBUG = (import.meta.env.VITE_DEBUG || 'true') === 'true';
 
 // Log configuration (for debugging)
 if (DEBUG) {
-  console.log('🔧 API Config:', { API_BASE_URL, API_TIMEOUT });
+  console.log('  API Config:', { API_BASE_URL, API_TIMEOUT });
 }
 
 // ═══════════════════════════════════════════════════════════════

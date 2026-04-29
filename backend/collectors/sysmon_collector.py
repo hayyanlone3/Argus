@@ -22,9 +22,7 @@ EV_REG_SET_3 = 14
 EV_CREATE_REMOTE_THREAD = 8
 EV_PROCESS_ACCESS = 10
 
-# Dynamic channel detection
 SYS_CHANNEL = "Microsoft-Windows-Sysmon/Operational"
-# Test channel on import (basic attempt)
 try:
     import win32evtlog
 except:
@@ -66,38 +64,48 @@ class SysmonCollector:
 
     def start(self):
         if not self.enabled:
-            logger.warning("SysmonCollector disabled (non-Windows)")
+            logger.info("SysmonCollector disabled (non-Windows)")
             return
         
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, name="SysmonCollector", daemon=True)
         self._thread.start()
-        logger.warning(f"SysmonCollector started (poll={self.poll_seconds}s)")
+        logger.info(f"SysmonCollector started (poll={self.poll_seconds}s)")
 
     def stop(self):
         self._stop.set()
         if self._thread:
             self._thread.join(timeout=5)
-        logger.warning("SysmonCollector stopped")
+        logger.info("SysmonCollector stopped")
+
+    def _open_query(self):
+        """Open the Sysmon EvtQuery handle. Returns handle or None on failure."""
+        query_str = f"*[System/Provider/@Name='{PROVIDER_NAME}']"
+        flags = win32evtlog.EvtQueryReverseDirection
+        try:
+            return win32evtlog.EvtQuery(SYS_CHANNEL, flags, query_str)
+        except Exception:
+            try:
+                return win32evtlog.EvtQuery("Sysmon/Operational", flags, query_str)
+            except Exception:
+                return None
 
     def _run(self):
-        query = f"*[System/Provider/@Name='{PROVIDER_NAME}']"
         iterations = 0
-        
+        consecutive_errors = 0
+
+        # Open the query handle ONCE — not on every loop iteration
+        q = self._open_query()
+        if q is None:
+            logger.warning("Sysmon event log not available, disabling collector")
+            self.enabled = False
+            return
+
         while not self._stop.is_set():
             try:
                 iterations += 1
-                if iterations % 10 == 0:
-                    logger.info("Telemetry sensor heartbeat: Polling...")
-
-                flags = win32evtlog.EvtQueryReverseDirection
-                
-                # TRY CHANNEL A
-                try:
-                   q = win32evtlog.EvtQuery(SYS_CHANNEL, flags, query)
-                except:
-                   # FALLBACK TO CHANNEL B
-                   q = win32evtlog.EvtQuery("Sysmon/Operational", flags, query)
+                if iterations % 300 == 0:
+                    logger.debug("Telemetry sensor heartbeat: Polling...")
 
                 events = win32evtlog.EvtNext(q, 128)
 
@@ -109,33 +117,53 @@ class SysmonCollector:
                 for evt in events:
                     try:
                         xml = _evt_xml(evt)
-                        if not xml: continue
+                        if not xml:
+                            continue
                         parsed = _parse_sysmon_xml(xml)
                         rid = int(parsed["record_id"])
-                        
+
                         if self._last_record_id is None:
-                            # BOOTSTRAP: Look back 100 events to ensure we have context
                             self._last_record_id = rid - 100
-                            logger.warning(f"  Telemetry sensor BOOTSTRAPPED with 100-event lookback at RID: {rid}")
+                            logger.info(f"Telemetry sensor BOOTSTRAPPED with 100-event lookback at RID: {rid}")
 
                         if rid <= self._last_record_id:
                             break
-                        
+
                         new_events.append(parsed)
-                    except:
+                    except Exception:
                         continue
 
                 if new_events:
-                    logger.warning(f"[COLLECTOR] Found {len(new_events)} NEW events!")
+                    consecutive_errors = 0
+                    if len(new_events) > 10:
+                        logger.info(f"[COLLECTOR] Found {len(new_events)} NEW events")
                     self._last_record_id = int(new_events[0]["record_id"])
                     for p in reversed(new_events):
-                        self._handle(p["event_id"], p["data"])
+                        try:
+                            self._handle(p["event_id"], p["data"])
+                        except Exception as handle_err:
+                            logger.debug(f"Error handling event {p['event_id']}: {handle_err}")
 
                 time.sleep(self.poll_seconds)
 
             except Exception as e:
-                logger.error(f"SysmonCollector error: {e}")
-                time.sleep(5)
+                consecutive_errors += 1
+                logger.error(f"SysmonCollector error #{consecutive_errors}: {e}")
+
+                backoff_time = min(30, self.poll_seconds * (2 ** min(consecutive_errors, 5)))
+                time.sleep(backoff_time)
+
+                if consecutive_errors > 5:
+                    logger.error("Too many consecutive errors, disabling SysmonCollector")
+                    self.enabled = False
+                    break
+
+                # Re-open the query handle after error — old handle may be stale
+                q = self._open_query()
+                if q is None:
+                    logger.error("Could not re-open Sysmon query, disabling collector")
+                    self.enabled = False
+                    break
 
     def _handle(self, event_id: int, data: Dict[str, Any]):
         if event_id == EV_PROCESS_CREATE:
@@ -157,7 +185,9 @@ class SysmonCollector:
             proc_guid = data.get("ProcessGuid")
             parent_guid = data.get("ParentProcessGuid")
             
-            logger.warning(f"   [SYSMON] PROCESS_CREATE: {image} ({pid})")
+            suspicious_processes = ["cmd.exe", "powershell.exe", "wscript.exe", "cscript.exe", "rundll32.exe", "regsvr32.exe"]
+            if any(proc in image.lower() for proc in suspicious_processes):
+                logger.info(f"[SYSMON] PROCESS_CREATE: {image} ({pid})")
             
             publish_event(TelemetryEvent(
                 event_id=new_event_id(),
@@ -184,7 +214,13 @@ class SysmonCollector:
             pid = data.get("ProcessId")
             proc_guid = data.get("ProcessGuid")
             
-            logger.warning(f"[SYSMON] FILE_CREATE: {path}")
+            # Only log suspicious file operations to reduce noise
+            suspicious_extensions = [".exe", ".dll", ".ps1", ".bat", ".cmd", ".vbs", ".js"]
+            suspicious_paths = ["temp", "appdata", "programdata", "startup"]
+            
+            if (any(ext in path.lower() for ext in suspicious_extensions) or 
+                any(sp in path.lower() for sp in suspicious_paths)):
+                logger.debug(f"[SYSMON] FILE_CREATE: {path}")
             
             publish_event(TelemetryEvent(
                 event_id=new_event_id(),
@@ -207,7 +243,10 @@ class SysmonCollector:
             pid = data.get("ProcessId")
             proc_guid = data.get("ProcessGuid")
             
-            logger.warning(f"[SYSMON] REG_SET: {key}")
+            suspicious_reg_paths = ["run", "runonce", "services", "winlogon", "image file execution options"]
+            
+            if any(sp in key.lower() for sp in suspicious_reg_paths):
+                logger.debug(f"[SYSMON] REG_SET: {key}")
             
             publish_event(TelemetryEvent(
                 event_id=new_event_id(),
