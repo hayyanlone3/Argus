@@ -120,14 +120,49 @@ export default function IncidentDetail() {
         {/* Forensic Intel Sidebar */}
         <div className="col-span-3 border-r border-slate-800 bg-[#0f172a] p-6 overflow-y-auto space-y-8">
            <section>
-              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                Attack Narrative
-              </h3>
-              <div className="bg-slate-900/50 rounded p-4 border border-slate-800/80 italic text-slate-300 text-sm leading-relaxed">
-                "{inc.narrative || 'Analyzing telemetry for behavioral markers...'}"
-              </div>
-           </section>
+               <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                 Attack Narrative
+               </h3>
+               <div className="bg-slate-900/50 rounded p-4 border border-slate-800/80 italic text-slate-300 text-sm leading-relaxed">
+                 "{inc.narrative || 'Analyzing telemetry for behavioral markers...'}"
+               </div>
+            </section>
+
+            <section>
+               <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                 Process Chain
+               </h3>
+               <div className="space-y-2">
+                  {(incidentData.edges || []).map((edge, i) => {
+                     const srcNode = (incidentData.nodes || []).find(n => n.id === edge.source_id);
+                     const tgtNode = (incidentData.nodes || []).find(n => n.id === edge.target_id);
+                     return (
+                        <div key={i} className="bg-slate-900/50 rounded p-3 border border-slate-800/80">
+                           <div className="flex items-center gap-2 text-xs">
+                              <span className="font-mono text-slate-300">{srcNode?.name || 'unknown'}</span>
+                              <span className="text-slate-600">→</span>
+                              <span className="font-mono font-bold text-white">{tgtNode?.name || 'unknown'}</span>
+                           </div>
+                           {srcNode?.path && <p className="text-[10px] text-slate-600 font-mono mt-1 truncate">{srcNode.path}</p>}
+                           {tgtNode?.path && <p className="text-[10px] text-slate-600 font-mono truncate">{tgtNode.path}</p>}
+                           <div className="flex items-center gap-2 mt-2">
+                              <span className="text-[9px] text-slate-500">{edge.edge_type?.toUpperCase()}</span>
+                              {edge.final_severity && (
+                                 <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${
+                                    edge.final_severity === 'CRITICAL' ? 'bg-red-900/30 text-red-400' :
+                                    edge.final_severity === 'WARNING' ? 'bg-amber-900/30 text-amber-400' :
+                                    'bg-slate-800 text-slate-500'
+                                 }`}>{edge.final_severity}</span>
+                              )}
+                              <span className="text-[9px] font-mono text-slate-500 ml-auto">score: {((edge.anomaly_score || edge.ml_anomaly_score || 0) * 100).toFixed(0)}%</span>
+                           </div>
+                        </div>
+                     );
+                  })}
+               </div>
+            </section>
 
            <section>
               <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -146,22 +181,35 @@ export default function IncidentDetail() {
               </div>
            </section>
 
-           <section>
-              <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                Activity Timeline
-              </h3>
-              <div className="relative pl-6 border-l border-slate-800 space-y-6 text-xs">
-                 {(incidentData.edges || []).slice(0, 5).map((edge, i) => (
-                    <div key={i} className="relative">
-                       <span className="absolute -left-[30px] top-1 w-2 h-2 rounded-full bg-slate-700 border border-slate-950" />
-                       <p className="text-slate-500 font-mono">{formatDate(edge.timestamp)}</p>
-                       <p className="font-black text-white">{edge.edge_type?.toUpperCase() || 'ACTION'}</p>
-                       <p className="text-slate-400 truncate opacity-60 italic">{String(edge.source_id).substring(0,8)} {" -> "} {String(edge.target_id).substring(0,8)}</p>
-                    </div>
-                 ))}
-              </div>
-           </section>
+            <section>
+               <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                 Activity Timeline
+               </h3>
+               <div className="relative pl-6 border-l border-slate-800 space-y-6 text-xs">
+                  {(incidentData.edges || []).slice(0, 5).map((edge, i) => {
+                     const srcNode = (incidentData.nodes || []).find(n => n.id === edge.source_id);
+                     const tgtNode = (incidentData.nodes || []).find(n => n.id === edge.target_id);
+                     return (
+                     <div key={i} className="relative">
+                        <span className="absolute -left-[30px] top-1 w-2 h-2 rounded-full bg-slate-700 border border-slate-950" />
+                        <p className="text-slate-500 font-mono">{formatDate(edge.timestamp)}</p>
+                        <p className="font-black text-white">{edge.edge_type?.toUpperCase() || 'ACTION'}</p>
+                        <p className="text-slate-400 truncate">{srcNode?.name || 'unknown'} → {tgtNode?.name || 'unknown'}</p>
+                        {srcNode?.path && <p className="text-slate-600 truncate font-mono text-[10px]">{srcNode.path}</p>}
+                        {tgtNode?.path && <p className="text-slate-600 truncate font-mono text-[10px]">{tgtNode.path}</p>}
+                        {edge.final_severity && (
+                           <span className={`inline-block mt-1 px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                              edge.final_severity === 'CRITICAL' ? 'bg-red-900/30 text-red-400' :
+                              edge.final_severity === 'WARNING' ? 'bg-amber-900/30 text-amber-400' :
+                              'bg-slate-800 text-slate-500'
+                           }`}>{edge.final_severity} ({(edge.anomaly_score || edge.ml_anomaly_score || 0).toFixed(2)})</span>
+                        )}
+                     </div>
+                     );
+                  })}
+               </div>
+            </section>
         </div>
 
         {/* Tactical View Center */}

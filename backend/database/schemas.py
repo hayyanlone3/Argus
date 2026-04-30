@@ -42,7 +42,6 @@ class EdgeCreate(BaseModel):
 
 
 class EdgeResponse(BaseModel):
-    """Schema for returning edge data."""
     id: int
     source_id: int
     target_id: int

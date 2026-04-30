@@ -85,7 +85,6 @@ export default function Layer3Dashboard() {
         </div>
       )}
 
-      {/* Incident Feed */}
       <div>
         <h2>Recent Incidents</h2>
         <IncidentFeed limit={20} />

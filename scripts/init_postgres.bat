@@ -1,14 +1,4 @@
 @echo off
-REM ═══════════════════════════════════════════════════════════════════════════════
-REM ARGUS v2.2 — PostgreSQL Setup (D: Drive Version)
-REM ═══════════════════════════════════════════════════════════════════════════════
-
-cls
-echo.
-echo ╔════════════════════════════════════════════════════════════════════════════╗
-echo ║  ARGUS v2.2 — PostgreSQL Setup (D: Drive)                                 ║
-echo ╚════════════════════════════════════════════════════════════════════════════╝
-echo.
 
 REM Try to find psql in common D: locations
 set "PSQL_PATH=D:\PostgreSQL\16\bin\psql.exe"

@@ -68,10 +68,6 @@ def load_trained_river_model():
         )
         return False
 
-# DO NOT load the trained model at import time - causes startup hang!
-# Model will be loaded lazily in Layer2RuntimeEngine._run() instead
-
-# In-memory latest results (safe start; DB persistence can come later)
 LATEST_DECISIONS: Dict[str, Dict[str, Any]] = {}  # event_id -> payload
 LATEST_LOCK = threading.Lock()
 
@@ -92,7 +88,7 @@ def refresh_policy_cache():
                 "auto_response_enabled": policy.auto_response_enabled,
                 "kill_on_alert": policy.kill_on_alert,
                 "quarantine_on_warn": policy.quarantine_on_warn,
-                "min_final_score_incident": policy.min_final_score_incident,
+                "min_final_score_incident": float(os.getenv("ARGUS_MIN_INCIDENT_SCORE", str(policy.min_final_score_incident))),
             }
             _POLICY_LAST_REFRESH = time.time()
     except Exception as e:
@@ -252,7 +248,6 @@ def try_quarantine_path(
             "status": getattr(q, "status", "QUARANTINED"),
         }
     except Exception as ex:
-        # QuarantineService already rolls back on DatabaseError, but keep response informative
         try:
             db.rollback()
         except Exception:
@@ -273,29 +268,56 @@ def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
         if evt.kind == "PROCESS_CREATE" and evt.child_cmd:
             cmd = (evt.child_cmd or "").lower()
             
-            # Malicious PowerShell patterns
+            # SIMULATION FOLDER DETECTION - High priority!
+            is_from_simulation = False
+            if evt.child_process and "simulation" in evt.child_process.lower():
+                is_from_simulation = True
+            if evt.target_path and "simulation" in evt.target_path.lower():
+                is_from_simulation = True
+            if evt.parent_process and "simulation" in evt.parent_process.lower():
+                is_from_simulation = True
+            
+            # Tier 1: ACTUAL attack indicators (these alone trigger high score)
+            tier1_attack_patterns = [
+                "downloadstring",
+                "downloadfile",
+                "invoke-webrequest",
+                "iwr ",
+                "wget ",
+                "invoke-expression",
+                "iex(", "iex ",
+                "frombase64string",
+                "-encodedcommand",
+                "new-object net.webclient",
+            ]
+            
+            # Tier 2: Supporting indicators (only matter if Tier 1 is also present)
+            tier2_supporting_patterns = [
+                "-executionpolicy bypass",
+                "-exec bypass",
+                "-ep bypass",
+                "-windowstyle hidden",
+                "-w hidden",
+                "-noprofile",
+            ]
+            
             if "powershell" in (evt.child_process or "").lower():
-                if any(pattern in cmd for pattern in [
-                    "-executionpolicy bypass",
-                    "-exec bypass",
-                    "-ep bypass",
-                    "downloadstring",
-                    "downloadfile",
-                    "invoke-webrequest",
-                    "iwr",
-                    "wget",
-                    "curl",
-                    "invoke-expression",
-                    "iex",
-                    "frombase64string",
-                    "-encodedcommand",
-                    "-enc",
-                    "-windowstyle hidden",
-                    "-w hidden",
-                    "noprofile",
-                ]):
+                has_tier1 = any(pattern in cmd for pattern in tier1_attack_patterns)
+                has_tier2 = any(pattern in cmd for pattern in tier2_supporting_patterns)
+                
+                # SIMULATION + malicious pattern = 1.0 score (guaranteed detection)
+                if is_from_simulation and has_tier1:
+                    score = 1.0
+                    reasons.append("simulation_malware_tier1_attack")
+                    logger.error(f"  MALWARE SIMULATION DETECTED: {cmd[:100]}")
+                elif has_tier1:
                     score += 0.90
                     reasons.append("malicious_powershell_pattern")
+                    logger.error(f"  LAYER A: Malicious PowerShell detected: {cmd[:100]}")
+                elif has_tier2:
+                    # Tier 2 alone = mild suspicion (IDEs legitimately use -ExecutionPolicy Bypass)
+                    score += 0.15
+                    reasons.append("powershell_bypass_flag")
             
             # Malicious cmd patterns
             if "cmd.exe" in (evt.child_process or "").lower():
@@ -312,6 +334,7 @@ def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
                 ]):
                     score += 0.70
                     reasons.append("reconnaissance_command")
+                    logger.error(f"LAYER A: Reconnaissance command detected: {cmd[:100]}")
         
         # 1. Entropy (File Only & Process Launch)
         file_to_check = evt.target_path if evt.kind == "FILE_CREATE" else (evt.child_process if evt.kind == "PROCESS_CREATE" else None)
@@ -387,91 +410,82 @@ P_MATRIX = PMatrixModel()
 def score_layer_b(evt: TelemetryEvent) -> Dict[str, Any]:
     if evt.kind != "PROCESS_CREATE":
         return {"score": 0.0, "reasons": []}
-
+    
     parent = (evt.parent_process or "").lower()
     child = (evt.child_process or "").lower()
     
     parent_name = parent.split("\\")[-1] if "\\" in parent else parent
     child_name = child.split("\\")[-1] if "\\" in child else child
     
-    # Trusted system paths - reduce score significantly
-    trusted_paths = [
-        "c:\\windows\\system32",
-        "c:\\windows\\syswow64",
-        "c:\\program files",
-        "c:\\program files (x86)",
+    # TIER 1: TRUSTED SYSTEM PROCESSES - never flag
+    trusted_system_processes = [
+        "explorer.exe", "svchost.exe", "services.exe", "csrss.exe",
+        "smss.exe", "wininit.exe", "lsass.exe", "spoolsv.exe",
+        "winlogon.exe", "taskmgr.exe", "dllhost.exe", "conhost.exe",
     ]
     
-    child_is_trusted = any(child.startswith(path) for path in trusted_paths)
-    parent_is_trusted = any(parent.startswith(path) for path in trusted_paths)
-    
-    # CRITICAL FIX: Only reduce score if BOTH are trusted AND it's a common spawn
-    # Unusual spawns (notepad → cmd, calc → notepad) should still be flagged!
-    common_system_spawns = [
-        ("explorer.exe", "notepad.exe"),
-        ("explorer.exe", "calc.exe"),
-        ("svchost.exe", "dllhost.exe"),
-        ("services.exe", "svchost.exe"),
+    # TIER 2: DEVELOPMENT TOOLS - their spawns are legitimate UNLESS malicious command
+    dev_tool_parents = [
+        "opencode.exe", "code.exe", "devenv.exe", "pycharm",
+        "idea", "webstorm", "rider", "goland", "clion",
+        "windowsterminal.exe", "wt.exe", "cursor.exe",
     ]
     
-    is_common_spawn = any(
-        parent_name == p and child_name == c 
-        for p, c in common_system_spawns
-    )
+    # TIER 3: LOLBins that dev tools legitimately spawn
+    legitimate_shell_spawns = ["cmd.exe", "powershell.exe", "pwsh.exe", "bash.exe", "wsl.exe"]
     
-    # Only give low score if it's a known common system spawn
-    if child_is_trusted and parent_is_trusted and is_common_spawn:
-        return {"score": 0.05, "reasons": ["trusted_system_path"]}
+    parent_is_dev_tool = any(dt in parent_name for dt in dev_tool_parents)
+    parent_is_system = any(sp in parent_name for sp in trusted_system_processes)
+    child_is_shell = any(ls in child_name for ls in legitimate_shell_spawns)
+    
+    # CRITICAL: Check for MALICIOUS command patterns FIRST
+    cmd = (evt.child_cmd or "").lower()
+    malicious_patterns = [
+        "downloadstring", "invoke-webrequest", "iwr ",
+        "invoke-expression", "iex(", "iex ",
+        "frombase64string", "-encodedcommand", "-enc ",
+        "new-object net.webclient", "curl ", "wget ",
+    ]
+    has_malicious_cmd = any(p in cmd for p in malicious_patterns)
+    
+    # IF MALICIOUS COMMAND DETECTED: Always flag, regardless of parent
+    if has_malicious_cmd and cmd:  # cmd must not be empty
+        logger.error(f"  MALWARE PATTERN in {child_name}: {cmd[:100]}")
+        return {"score": 0.95, "reasons": ["malicious_command_detected", f"pattern_in_{parent_name}_spawn"]}
+    
+    # DEV TOOL + SHELL + NO malicious cmd = LEGITIMATE (score 0.05)
+    if parent_is_dev_tool and child_is_shell and not has_malicious_cmd:
+        logger.debug(f"  Legitimate dev tool spawn: {parent_name} -> {child_name}")
+        return {"score": 0.05, "reasons": ["dev_tool_legitimate_spawn"]}
+    
+    # SYSTEM PROCESS + common spawns = legitimate
+    if parent_is_system and child_is_shell:
+        return {"score": 0.10, "reasons": ["system_process_spawn"]}
     
     # Self-spawn is usually legitimate
     if parent_name == child_name:
         return {"score": 0.1, "reasons": ["self_spawn"]}
-
-    s = P_MATRIX.update_and_score(parent, child)
     
-    # Reduce score for trusted child processes (only if common spawn)
-    if child_is_trusted and is_common_spawn:
-        s = s * 0.3
-        
+    s = P_MATRIX.update_and_score(parent, child)
     reasons = []
     
-    # BOOST SCORE for highly unusual spawns
-    # Examples: notepad → cmd, calc → anything, malware.exe → calc
+    # UNUSUAL PARENTS (notepad, calc, etc.) -> LOLBin = suspicious
     unusual_parents = ["notepad.exe", "calc.exe", "mspaint.exe", "wordpad.exe"]
-    lolbins = ["cmd.exe", "powershell.exe", "wscript.exe", "cscript.exe", "mshta.exe"]
     
     if any(up in parent_name for up in unusual_parents):
-        if any(lb in child_name for lb in lolbins):
-            s = max(s, 0.85)  # Force high score for unusual parent → LOLBin
+        if child_is_shell:
+            s = max(s, 0.85)
             reasons.append("unusual_parent_to_lolbin")
-        else:
-            s = max(s, 0.70)  # Force medium-high score for unusual parent
-            reasons.append("unusual_parent_spawn")
     
-    # BOOST for unknown parent (not in system paths)
-    if not parent_is_trusted and any(lb in child_name for lb in lolbins):
-        s = max(s, 0.80)  # Unknown process spawning LOLBin
+    # Unknown parent (not system, not dev tool) -> LOLBin = suspicious
+    if not parent_is_system and not parent_is_dev_tool and child_is_shell:
+        s = max(s, 0.80)
         reasons.append("unknown_parent_to_lolbin")
     
-    # CRITICAL: Check command line for malicious patterns
-    # Even if spawn is common (cmd → powershell), malicious command = high score
-    cmd = (evt.child_cmd or "").lower()
-    if cmd and any(lb in child_name for lb in lolbins):
-        malicious_patterns = [
-            "-executionpolicy bypass", "-exec bypass", "-ep bypass",
-            "downloadstring", "downloadfile", "invoke-webrequest",
-            "invoke-expression", "iex", "frombase64string",
-            "-encodedcommand", "-enc", "-windowstyle hidden",
-            "whoami", "net user", "net localgroup", "reg query", "reg add"
-        ]
-        if any(pattern in cmd for pattern in malicious_patterns):
-            s = max(s, 0.85)  # Force high score for malicious command
-            reasons.append("malicious_command_line")
-    
     if s >= 0.7:
-        if "rare_transition" not in reasons:
-            reasons.append("rare_transition")
-    return {"score": s, "reasons": reasons}
+        reasons.append("rare_transition")
+    
+    return {"score": clamp01(s), "reasons": reasons}
 
 # Layer C: Online ML
 def layer_c_features(evt: TelemetryEvent, a_score: float, b_score: float) -> Dict[str, float]:
@@ -501,12 +515,21 @@ def layer_c_features(evt: TelemetryEvent, a_score: float, b_score: float) -> Dic
     features.update({
         "cmd_has_base64": 1.0 if any(x in cmd for x in ["-enc", "base64", "frombase64"]) else 0.0,
         "cmd_has_download": 1.0 if any(x in cmd for x in ["downloadstring", "wget", "curl", "invoke-webrequest"]) else 0.0,
-        "cmd_has_bypass": 1.0 if any(x in cmd for x in ["bypass", "unrestricted", "hidden", "windowstyle"]) else 0.0,
+        "cmd_has_bypass": 1.0 if any(x in cmd for x in ["-executionpolicy bypass", "-exec bypass", "-ep bypass"]) else 0.0,
+        "cmd_has_hidden": 1.0 if any(x in cmd for x in ["-windowstyle hidden", "-w hidden"]) else 0.0,
+        "cmd_has_attack": 1.0 if any(x in cmd for x in ["downloadstring", "downloadfile", "iex(", "iex ", "invoke-expression", "frombase64string", "-encodedcommand"]) else 0.0,
         "cmd_length": min(len(cmd) / 100.0, 10.0),
     })
 
+    # Suspicious command = actual attack indicators OR (bypass + hidden), not just bypass alone
     is_lolbin = ("powershell" in child) or ("cmd" in child)
-    is_susp_cmd = (features["cmd_has_base64"] or features["cmd_has_download"] or features["cmd_has_bypass"] or features["cmd_length"] > 1.5)
+    is_susp_cmd = (
+        features["cmd_has_base64"] or
+        features["cmd_has_download"] or
+        features["cmd_has_attack"] or
+        (features["cmd_has_bypass"] and features["cmd_has_hidden"]) or
+        features["cmd_length"] > 1.5
+    )
     
     features.update({
         "is_suspicious_lolbin": 1.0 if is_lolbin and is_susp_cmd else 0.0,
@@ -567,7 +590,8 @@ def score_layer_c(evt: TelemetryEvent, a_score: float, b_score: float) -> Dict[s
         "opera.exe", "iexplore.exe",
         
         # Development tools
-        "code.exe", "devenv.exe", "kiro.exe", "git.exe", 
+        "code.exe", "devenv.exe", "kiro.exe", "git.exe",
+        "opencode.exe", "opencode",
         "node.exe", "npm.exe", "python.exe", "java.exe",
         
         # Communication
@@ -584,31 +608,39 @@ def score_layer_c(evt: TelemetryEvent, a_score: float, b_score: float) -> Dict[s
     
     is_legitimate = any(app in child_name for app in legitimate_apps)
 
+    # Also check if parent is a dev tool spawning a terminal (legitimate)
+    parent = (evt.parent_process or "").lower()
+    parent_name = parent.split("\\")[-1] if "\\" in parent else parent
+    dev_tool_parents = [
+        "opencode.exe", "opencode", "code.exe", "devenv.exe", "kiro.exe",
+        "pycharm", "idea", "webstorm", "rider", "goland", "clion",
+        "windowsterminal.exe", "wt.exe", "conhost.exe", "explorer.exe",
+    ]
+    parent_is_dev_tool = any(dt in parent_name for dt in dev_tool_parents)
+    child_is_terminal = child_name in ["powershell.exe", "pwsh.exe", "cmd.exe", "bash.exe", "wsl.exe"]
+
+    is_legitimate_terminal = parent_is_dev_tool and child_is_terminal
+
     with _ML_LOCK:
         try:
             raw_river = float(_ML_MODEL.score_one(feats))
-            
+
             river_contribution = clamp01(raw_river)
 
             math_avg = (a_score + b_score) / 2.0
             final_score = math_avg * 0.6 + river_contribution * 0.4
-            
+
             _ML_MODEL.learn_one(feats)
             _ML_SEEN += 1
-            
+
         except Exception as e:
             final_score = (a_score + b_score) / 2.0
             raw_river = 0.0
             river_contribution = 0.0
 
     final_score = clamp01(final_score)
-    
+
     reasons = ["windows_baseline_model"]
-    
-    # WHITELIST: Reduce score for legitimate processes
-    if is_legitimate:
-        final_score = final_score * 0.5  # 50% reduction for known legitimate apps
-        reasons.append("legitimate_process_reduction")
         
     if final_score > 0.8:
         reasons.append("high_risk_detected")
@@ -687,6 +719,368 @@ def _child_is_lolbin(evt: TelemetryEvent) -> bool:
     return False
 
 
+
+# EVIDENCE-BASED LEGITIMACY VERIFICATION
+def verify_digital_signature(path: str) -> Dict[str, Any]:
+    result = {"verified": False, "signer": None, "status": "unknown", "error": None}
+    try:
+        ps_cmd = f"Get-AuthenticodeSignature -FilePath '{path}' | ConvertTo-Json -Compress"
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+            capture_output=True, text=True, timeout=5
+        )
+        if proc.returncode == 0 and proc.stdout.strip():
+            import json
+            sig = json.loads(proc.stdout.strip())
+            status = sig.get("Status", "Unknown")
+            if status == "Valid":
+                result["verified"] = True
+                result["status"] = "valid"
+                cert = sig.get("SignerCertificate", {})
+                if isinstance(cert, dict):
+                    subject = cert.get("Subject", "")
+                    issuer = cert.get("Issuer", "")
+                    result["signer"] = subject if subject else issuer
+            else:
+                result["status"] = status.lower() if status else "unsigned"
+        else:
+            result["error"] = proc.stderr.strip() if proc.stderr else "no output"
+    except Exception as e:
+        result["error"] = str(e)
+    return result
+
+def check_path_legitimacy(path: str) -> Dict[str, Any]:
+    """Verify the binary is in an expected, non-suspicious location."""
+    result = {"legitimate_path": False, "location_type": "unknown", "reason": None}
+    if not path:
+        result["reason"] = "no path provided"
+        return result
+
+    p = path.lower()
+
+    # Tier 1: Protected system directories (highest trust)
+    system_dirs = [
+        "c:\\windows\\system32\\",
+        "c:\\windows\\syswow64\\",
+        "c:\\windows\\winsxs\\",
+    ]
+    for d in system_dirs:
+        if p.startswith(d):
+            result["legitimate_path"] = True
+            result["location_type"] = "windows_system"
+            result["reason"] = f"Located in system directory: {d}"
+            return result
+
+    # Tier 2: Standard Program Files
+    program_dirs = [
+        "c:\\program files\\",
+        "c:\\program files (x86)\\",
+    ]
+    for d in program_dirs:
+        if p.startswith(d):
+            result["legitimate_path"] = True
+            result["location_type"] = "program_files"
+            result["reason"] = f"Located in Program Files: {d}"
+            return result
+
+    # Tier 3: Known user-level app locations
+    user_app_dirs = [
+        "\\appdata\\local\\",
+        "\\appdata\\roaming\\",
+        "\\users\\all users\\",
+    ]
+    for d in user_app_dirs:
+        if d in p:
+            result["legitimate_path"] = True
+            result["location_type"] = "user_app_data"
+            result["reason"] = f"Located in user app data directory"
+            return result
+
+    # Tier 4: Suspicious locations
+    suspicious_locs = [
+        "\\temp\\", "\\appdata\\local\\temp\\", "\\public\\", "\\programdata\\",
+        "\\simulations\\",  # ARGUS malware simulations
+        "argus\\simulations",  # Relative path variant
+    ]
+    for loc in suspicious_locs:
+        if loc in p:
+            result["legitimate_path"] = False
+            result["location_type"] = "suspicious_location"
+            result["reason"] = f"Located in suspicious directory: {loc}"
+            return result
+
+    result["reason"] = "Path does not match known legitimate or suspicious patterns"
+    return result
+
+def check_command_legitimacy(evt: TelemetryEvent) -> Dict[str, Any]:
+    result = {"legitimate_command": False, "command_type": "unknown", "reason": None}
+    cmd = (evt.child_cmd or "").lower()
+
+    if not cmd:
+        result["reason"] = "no command line provided"
+        return result
+
+    attack_patterns = [
+        "downloadstring", "downloadfile", "invoke-webrequest",
+        "iex(", "iex ", "invoke-expression",
+        "frombase64string", "-encodedcommand", "-enc ",
+        "net use \\\\", "net user ", "net localgroup",
+        "mimikatz", "psexec", "regsvr32 /s",
+        "randomnumbergenerator", "writeallbytes",
+        "new-itemproperty", "set-mppreference",
+        "iwr ", "wget ", "curl.exe",
+    ]
+
+    legit_patterns = [
+        "vscode", "shell-integration", "shellintegration",
+        "profile.ps1", "microsoft.powershell_profile",
+        "-noexit -command", "-noexit -command &",
+        "conda activate", "npm run", "python -m",
+        "__psscriptpolicytest_",
+    ]
+
+    for pattern in attack_patterns:
+        if pattern in cmd:
+            result["legitimate_command"] = False
+            result["command_type"] = "attack"
+            result["reason"] = f"Attack pattern detected in command: {pattern}"
+            return result
+
+    for pattern in legit_patterns:
+        if pattern in cmd:
+            result["legitimate_command"] = True
+            result["command_type"] = "ide_integration"
+            result["reason"] = f"Legitimate IDE/terminal pattern: {pattern}"
+            return result
+
+    # If launching a .bat/.ps1 from a suspicious location, flag it
+    for loc in ["\\public\\", "\\programdata\\", "\\temp\\", "\\simulations\\"]:
+        if loc in cmd:
+            result["legitimate_command"] = False
+            result["command_type"] = "suspicious_launch"
+            result["reason"] = f"Script launched from suspicious location: {loc}"
+            return result
+
+    if len(cmd) < 80:
+        result["legitimate_command"] = False
+        result["command_type"] = "simple_launch"
+        result["reason"] = "Simple process launch, no strong indicators either way"
+        return result
+
+    result["reason"] = "Command line analysis inconclusive"
+    return result
+
+def check_parent_lineage(evt: TelemetryEvent) -> Dict[str, Any]:
+    """Verify the process ancestry chain is legitimate."""
+    result = {"trusted_lineage": False, "lineage_type": "unknown", "reason": None}
+
+    parent = (evt.parent_process or "").lower()
+    parent_name = parent.split("\\")[-1] if "\\" in parent else parent
+    child = (evt.child_process or "").lower()
+    child_name = child.split("\\")[-1] if "\\" in child else child
+
+    # Known trusted lineage patterns
+    trusted_lineages = [
+        # explorer → IDE → terminal (standard dev workflow)
+        ("explorer.exe", ["code.exe", "opencode.exe", "devenv.exe", "kiro.exe", "pycharm", "idea"]),
+        # IDE → terminal (direct spawn)
+        ("code.exe", ["powershell.exe", "cmd.exe", "bash.exe", "wsl.exe", "pwsh.exe"]),
+        ("opencode.exe", ["powershell.exe", "cmd.exe", "bash.exe", "wsl.exe", "pwsh.exe"]),
+        ("devenv.exe", ["powershell.exe", "cmd.exe", "bash.exe", "wsl.exe"]),
+        ("kiro.exe", ["powershell.exe", "cmd.exe", "bash.exe", "wsl.exe"]),
+        ("pycharm", ["powershell.exe", "cmd.exe", "python.exe"]),
+        ("idea", ["powershell.exe", "cmd.exe"]),
+        # Terminal → shell (normal)
+        ("conhost.exe", ["cmd.exe", "powershell.exe"]),
+        ("windowsterminal.exe", ["powershell.exe", "cmd.exe"]),
+        ("wt.exe", ["powershell.exe", "cmd.exe"]),
+        # Explorer → common apps
+        ("explorer.exe", ["chrome.exe", "firefox.exe", "msedge.exe", "notepad.exe", "explorer.exe"]),
+    ]
+
+    for trusted_parent, trusted_children in trusted_lineages:
+        if trusted_parent in parent_name:
+            if any(tc in child_name for tc in trusted_children):
+                result["trusted_lineage"] = True
+                result["lineage_type"] = "trusted_chain"
+                result["reason"] = f"Trusted lineage: {parent_name} → {child_name}"
+                return result
+
+    result["reason"] = f"Lineage {parent_name} → {child_name} not in trusted patterns"
+    return result
+
+def check_temporal_consistency(evt: TelemetryEvent) -> Dict[str, Any]:
+    """Check if the spawn rate is normal for this parent (not a burst)."""
+    result = {"normal_rate": True, "spawn_count": 0, "reason": None}
+
+    parent = (evt.parent_process or "").lower()
+    parent_name = parent.split("\\")[-1] if "\\" in parent else parent
+
+    with _BURST_LOCK:
+        q = _WRITES_BY_PROC.get(parent_name)
+        if q:
+            now = evt.ts
+            cutoff = now - 60.0  # 1-minute window
+            count = sum(1 for t in q if t > cutoff)
+            result["spawn_count"] = count
+
+            # Dev tools can spawn many shells legitimately (but not 50+/min)
+            burst_limit = 50
+            if count > burst_limit:
+                result["normal_rate"] = False
+                result["reason"] = f"Suspicious spawn burst: {count} events in 60s from {parent_name}"
+                return result
+
+    result["reason"] = f"Normal spawn rate from {parent_name}"
+    return result
+
+class LegitimacyVerifier:
+    """Collects evidence across 5 channels to determine if a high-scoring process
+    is genuinely legitimate or malware disguising as a trusted app."""
+
+    @staticmethod
+    def verify(evt: TelemetryEvent) -> Dict[str, Any]:
+        """Run all 5 evidence channels and return structured verdict."""
+        child = (evt.child_process or "").lower()
+        child_name = child.split("\\")[-1] if "\\" in child else child
+
+        evidence = {}
+        positive_count = 0
+        total_checks = 5
+
+        # 1. Path verification
+        path_check = check_path_legitimacy(evt.child_process)
+        evidence["path"] = path_check
+        if path_check["legitimate_path"]:
+            positive_count += 1
+
+        # 2. Digital signature (only for .exe files)
+        if child_name.endswith(".exe") and evt.child_process:
+            sig_check = verify_digital_signature(evt.child_process)
+            evidence["signature"] = sig_check
+            if sig_check["verified"]:
+                positive_count += 1
+        else:
+            evidence["signature"] = {"verified": False, "status": "not_applicable", "signer": None, "error": None}
+
+        # 3. Command line analysis
+        cmd_check = check_command_legitimacy(evt)
+        evidence["command"] = cmd_check
+        if cmd_check["legitimate_command"]:
+            positive_count += 1
+        elif cmd_check["command_type"] == "attack":
+            # Attack pattern found — this is NOT legitimate, override immediately
+            evidence["verdict"] = "MALWARE"
+            evidence["confidence"] = "high"
+            evidence["positive_evidence"] = positive_count
+            evidence["total_checks"] = total_checks
+            evidence["explanation"] = "Attack patterns found in command line"
+            return evidence
+
+        # 4. Parent lineage
+        lineage_check = check_parent_lineage(evt)
+        evidence["lineage"] = lineage_check
+        if lineage_check["trusted_lineage"]:
+            positive_count += 1
+
+        # 5. Temporal consistency
+        temporal_check = check_temporal_consistency(evt)
+        evidence["temporal"] = temporal_check
+        if temporal_check["normal_rate"]:
+            positive_count += 1
+
+        # Determine verdict based on evidence count
+        if positive_count >= 4:
+            evidence["verdict"] = "LEGITIMATE"
+            evidence["confidence"] = "high"
+        elif positive_count >= 3:
+            evidence["verdict"] = "LIKELY_LEGITIMATE"
+            evidence["confidence"] = "medium"
+        elif positive_count >= 2:
+            evidence["verdict"] = "UNCERTAIN"
+            evidence["confidence"] = "low"
+        else:
+            evidence["verdict"] = "SUSPICIOUS"
+            evidence["confidence"] = "high"
+
+        evidence["positive_evidence"] = positive_count
+        evidence["total_checks"] = total_checks
+
+        # Build explanation
+        explanations = []
+        for channel, data in evidence.items():
+            if isinstance(data, dict) and "reason" in data:
+                explanations.append(data["reason"])
+        evidence["explanation"] = "; ".join(explanations)
+
+        return evidence
+
+
+def apply_legitimacy_verdict(
+    fusion_score: float,
+    fusion_decision: str,
+    evidence: Dict[str, Any]
+) -> Dict[str, Any]:
+    verdict = evidence.get("verdict", "UNCERTAIN")
+    confidence = evidence.get("confidence", "low")
+    
+    result = {
+        "original_score": round(fusion_score, 3),
+        "original_decision": fusion_decision,
+        "verdict": verdict,
+        "confidence": confidence,
+        "evidence_positive": evidence.get("positive_evidence", 0),
+        "evidence_total": evidence.get("total_checks", 0),
+        "explanation": evidence.get("explanation", ""),
+    }
+    
+    # CRITICAL FIX: NEVER override MALWARE ALERT or high scores with attack patterns
+    has_attack_cmd = evidence.get("command", {}).get("command_type") == "attack"
+    is_simulation_path = "simulation" in evidence.get("explanation", "").lower()
+    
+    # If it's clearly malware (high fusion score + attack pattern), NEVER reduce
+    if fusion_score >= 0.85 and (has_attack_cmd or is_simulation_path):
+        result["adjusted_score"] = round(fusion_score, 3)
+        result["adjusted_decision"] = "MALWARE ALERT"
+        result["rule"] = "malware_confirmed_no_override"
+        return result
+    
+    # If verdict is MALWARE or attack command detected, keep high score
+    if verdict == "MALWARE" or has_attack_cmd:
+        result["adjusted_score"] = 1.0
+        result["adjusted_decision"] = "MALWARE ALERT"
+        result["rule"] = "evidence_based_attack_confirmed"
+    elif verdict == "LEGITIMATE" and confidence in ("high", "medium"):
+        # Only override if NO malicious command patterns
+        if not has_attack_cmd and fusion_score < 0.90:
+            result["adjusted_score"] = round(fusion_score * 0.3, 3)
+            result["adjusted_decision"] = "NORMAL"
+            result["rule"] = "evidence_based_legitimacy_override"
+        else:
+            result["adjusted_score"] = round(fusion_score, 3)
+            result["adjusted_decision"] = "MALWARE ALERT"
+            result["rule"] = "malware_override_legitimacy"
+    elif verdict == "LIKELY_LEGITIMATE":
+        if has_attack_cmd:
+            result["adjusted_score"] = 1.0
+            result["adjusted_decision"] = "MALWARE ALERT"
+            result["rule"] = "attack_pattern_override"
+        else:
+            result["adjusted_score"] = round(fusion_score * 0.5, 3)
+            result["adjusted_decision"] = fusion_decision if fusion_score >= 0.85 else "SUSPICIOUS"
+            result["rule"] = "evidence_based_likely_legitimate"
+    elif has_attack_cmd or is_simulation_path:
+        result["adjusted_score"] = 1.0
+        result["adjusted_decision"] = "MALWARE ALERT"
+        result["rule"] = "attack_pattern_detected"
+    else:
+        result["adjusted_score"] = round(fusion_score, 3)
+        result["adjusted_decision"] = fusion_decision
+        result["rule"] = "insufficient_evidence_original_score_held"
+    
+    return result
+
+
 class Layer2RuntimeEngine:
     def __init__(self):
         self._stop = threading.Event()
@@ -733,19 +1127,19 @@ class Layer2RuntimeEngine:
                 "auto_response_enabled": False,
                 "kill_on_alert": False,
                 "quarantine_on_warn": True,
-                "min_final_score_incident": 0.5
+                "min_final_score_incident": 0.30
             }
 
             try:
                 evt: TelemetryEvent = SCORING_QUEUE.get(timeout=0.5)
                 
                 # FORCE LOG EVERY EVENT
-                logger.info(f"[DEBUG] ===== EVENT RECEIVED =====")
-                logger.info(f"[DEBUG] Kind: {evt.kind}")
-                logger.info(f"[DEBUG] Child: {evt.child_process}")
-                logger.info(f"[DEBUG] Parent: {evt.parent_process}")
-                logger.info(f"[DEBUG] Cmd: {evt.child_cmd[:100] if evt.child_cmd else 'None'}")
-                logger.info(f"[DEBUG] PID: {evt.child_pid}")
+                logger.info(f"[ENGINE] ✅ EVENT RECEIVED from queue")
+                logger.info(f"[ENGINE]   Kind: {evt.kind}")
+                logger.info(f"[ENGINE]   Child: {evt.child_process}")
+                logger.info(f"[ENGINE]   Parent: {evt.parent_process}")
+                logger.info(f"[ENGINE]   Cmd: {evt.child_cmd[:100] if evt.child_cmd else 'None'}")
+                logger.info(f"[ENGINE]   PID: {evt.child_pid}")
                 
                 # Only log high-priority events to reduce noise
                 if evt.kind in ["PROCESS_CREATE"] and any(x in (evt.child_process or "").lower() for x in ["cmd.exe", "powershell", "wscript", "cscript"]):
@@ -753,7 +1147,8 @@ class Layer2RuntimeEngine:
             except Exception as e:
                 # Don't silently ignore - log the error!
                 if "timed out" not in str(e).lower():
-                    logger.error(f"[ENGINE] Error getting event from queue: {e}")
+                    logger.error(f"[ENGINE] ❌ Error getting event from queue: {e}")
+                    logger.exception(f"[ENGINE] Full traceback:")
                 continue
 
             try:
@@ -824,7 +1219,110 @@ class Layer2RuntimeEngine:
                 c = score_layer_c(evt, a_score=a["score"], b_score=b["score"])
 
                 fused = fuse(a["score"], b["score"], c["score"])
+
+                # EVIDENCE-BASED LEGITIMACY VERIFICATION
+                # Only run for PROCESS_CREATE events that scored above suspicious threshold
+                legitimacy_evidence = None
                 
+                # CRITICAL: Never run legitimacy check if MALICIOUS COMMAND detected
+                cmd_lower = (evt.child_cmd or "").lower()
+                has_malicious_cmd = any(p in cmd_lower for p in [
+                    "downloadstring", "invoke-webrequest", "iex(", 
+                    "invoke-expression", "frombase64string", "-encodedcommand"
+                ])
+                
+                # Also check if path is in simulations folder
+                is_simulation = False
+                if evt.child_process and "simulation" in evt.child_process.lower():
+                    is_simulation = True
+                if evt.target_path and "simulation" in evt.target_path.lower():
+                    is_simulation = True
+                
+                # HIGH CONFIDENCE MALWARE: Skip legitimacy check entirely
+                if (fused.get("decision") == "MALWARE ALERT" and 
+                    (has_malicious_cmd or fused.get("final_score", 0) >= 0.90 or is_simulation)):
+                    logger.error(f"[MALWARE] High-confidence malware detected - skipping legitimacy override")
+                    fused["legitimacy"] = {
+                        "original_score": round(fused.get("final_score", 0), 3),
+                        "adjusted_score": round(fused.get("final_score", 0), 3),
+                        "adjusted_decision": "MALWARE ALERT",
+                        "verdict": "MALWARE",
+                        "confidence": "high",
+                        "rule": "malware_no_override",
+                        "explanation": "High-confidence malware - legitimacy check skipped"
+                    }
+                elif evt.kind == "PROCESS_CREATE" and fused.get("final_score", 0) >= 0.30:
+                    legitimacy_evidence = LegitimacyVerifier.verify(evt)
+                    
+                    # If command has malicious patterns, DON'T let legitimacy override
+                    if has_malicious_cmd or is_simulation:
+                        logger.error(f"[MALWARE] Malicious command/simulation detected - keeping malware verdict")
+                        legitimacy_evidence["verdict"] = "MALWARE"
+                        verdict_result = {
+                            "original_score": round(fused.get("final_score", 0), 3),
+                            "adjusted_score": round(fused.get("final_score", 0), 3),
+                            "adjusted_decision": "MALWARE ALERT",
+                            "verdict": "MALWARE",
+                            "confidence": "high",
+                            "rule": "malicious_cmd_no_override",
+                            "explanation": "Malicious command pattern detected"
+                        }
+                    else:
+                        verdict_result = apply_legitimacy_verdict(
+                            fused.get("final_score", 0),
+                            fused.get("decision", "NORMAL"),
+                            legitimacy_evidence,
+                        )
+                    
+                    fused["legitimacy"] = verdict_result
+                    fused["final_score"] = verdict_result["adjusted_score"]
+                    fused["decision"] = verdict_result["adjusted_decision"]
+                    fused["rule"] = str(fused.get("rule", "")) + " + " + verdict_result["rule"]
+                elif evt.kind == "PROCESS_CREATE":
+                    # Low score — still collect evidence for completeness but don't adjust
+                    legitimacy_evidence = LegitimacyVerifier.verify(evt)
+                    fused["legitimacy"] = {
+                        "original_score": round(fused.get("final_score", 0), 3),
+                        "original_decision": fused.get("decision", "NORMAL"),
+                        "adjusted_score": round(fused.get("final_score", 0), 3),
+                        "adjusted_decision": fused.get("decision", "NORMAL"),
+                        "verdict": legitimacy_evidence.get("verdict", "UNCERTAIN"),
+                        "confidence": legitimacy_evidence.get("confidence", "low"),
+                        "evidence_positive": legitimacy_evidence.get("positive_evidence", 0),
+                        "evidence_total": legitimacy_evidence.get("total_checks", 0),
+                        "explanation": legitimacy_evidence.get("explanation", ""),
+                        "rule": "low_score_no_adjustment",
+                    }
+
+                # FILE_CREATE legitimacy check for known system/temp patterns
+                if evt.kind == "FILE_CREATE":
+                    if evt.target_path:
+                        tp = evt.target_path.lower()
+                        file_legit_patterns = [
+                            "__psscriptpolicytest_",
+                            "\\windows\\temp\\",
+                            "\\appdata\\local\\temp\\microsoft.powershell_profile",
+                        ]
+                        for pattern in file_legit_patterns:
+                            if pattern in tp:
+                                orig_score = fused.get("final_score", 0)
+                                logger.info(f"[LEGIT] FILE_CREATE override: {tp.split(chr(92))[-1]} score {orig_score:.3f} → 0.05 (pattern: {pattern})")
+                                if orig_score > 0.10:
+                                    fused["final_score"] = 0.05
+                                    fused["decision"] = "NORMAL"
+                                    fused["legitimacy"] = {
+                                        "original_score": round(orig_score, 3),
+                                        "adjusted_score": 0.05,
+                                        "adjusted_decision": "NORMAL",
+                                        "verdict": "LEGITIMATE",
+                                        "confidence": "high",
+                                        "explanation": f"Known legitimate file pattern: {pattern}",
+                                        "rule": "file_pattern_override",
+                                    }
+                                break
+                    else:
+                        logger.debug(f"[LEGIT] FILE_CREATE but target_path is None for event")
+
                 # Debug logging for all scored events (helps tune thresholds)
                 if a["score"] > 0.3 or b["score"] > 0.3 or c["score"] > 0.3:
                     logger.info(f"[SCORING] {evt.kind} | {evt.child_process or evt.target_path}")
@@ -833,7 +1331,7 @@ class Layer2RuntimeEngine:
                 
                 # Enhanced logging for malware detection
                 if fused.get("decision") == "MALWARE ALERT":
-                    logger.error(f"🚨 MALWARE ALERT DETECTED!")
+                    logger.error(f"  MALWARE ALERT DETECTED!")
                     logger.error(f"   Process: {evt.child_process or evt.target_path}")
                     logger.error(f"   Session: {evt.session_id}")
                     logger.error(f"   Score: {fused.get('final_score'):.3f}")
@@ -869,19 +1367,27 @@ class Layer2RuntimeEngine:
                 # Auto-response logic
                 ml_ready = (not RIVER_AVAILABLE) or (_ML_MODEL is None) or (_ML_SEEN >= warmup)
 
+                # EVIDENCE-BASED OVERRIDE: Legitimacy verifier trumps all
+                evidence_overrides_kill = False
+                if legitimacy_evidence and legitimacy_evidence.get("verdict") == "LEGITIMATE":
+                    evidence_overrides_kill = True
+                    logger.info(f"[EVIDENCE] Process verified as LEGITIMATE — all auto-response blocked")
+                    logger.info(f"[EVIDENCE] Reason: {legitimacy_evidence.get('explanation', 'N/A')}")
+                    logger.info(f"[EVIDENCE] Evidence: {legitimacy_evidence.get('positive_evidence', 0)}/{legitimacy_evidence.get('total_checks', 0)} channels confirmed")
+
                 should_kill = False
                 killed = False
                 err = None
                 fast_path = False
                 fast_reason = None
-                
-                if fused.get("decision") == "MALWARE ALERT":
+
+                if fused.get("decision") == "MALWARE ALERT" and not evidence_overrides_kill:
                     should_kill = True
                     fast_reason = "fusion_malware_alert"
-                
+
                 river_score = c.get("raw_river", 0.0)
-                
-                if layer0_result and layer0_result.get("decision", {}).get("status") in ("CRITICAL", "BLOCK"):
+
+                if layer0_result and layer0_result.get("decision", {}).get("status") in ("CRITICAL", "BLOCK") and not evidence_overrides_kill:
                     should_kill = True
                     fast_path = True
                     fast_reason = "layer0_security_override"
@@ -890,34 +1396,51 @@ class Layer2RuntimeEngine:
                 is_kill_enabled = policy.get("kill_on_alert", False)
                 is_quarantine_enabled = policy.get("quarantine_on_warn", True)
                 
-                # OPTION 2: Enable Quarantine + Suspend (Recommended)
-                # Processes will be SUSPENDED (not killed)
-                # Files will be QUARANTINED
-                # IDE/Terminal processes are PROTECTED
-                is_kill_enabled = True  # Enable (uses suspend, not kill)
-                is_quarantine_enabled = True  # Enable quarantine
-                
-                logger.info(f"[AUTO-RESPONSE] Quarantine + Suspend ENABLED - Malware will be suspended and quarantined")
+                # Only enable auto-response if explicitly enabled in policy
+                if is_auto_response:
+                    logger.info(f"[AUTO-RESPONSE] Quarantine + Suspend ENABLED - Malware will be suspended and quarantined")
+                else:
+                    logger.info(f"[AUTO-RESPONSE] DISABLED - Malware will be detected but not automatically quarantined")
                 
                 # CRITICAL: Never auto-kill in development/testing environments
                 # Auto-kill is DISABLED by default for safety
                 # Only enable in production with careful testing
                 
-                # WHITELIST: Never auto-kill critical system processes
+                # TIER 1: NEVER flag these system processes (absolute whitelist)
                 safe_processes = [
-                    "explorer.exe", "svchost.exe", "csrss.exe", "smss.exe", 
-                    "wininit.exe", "services.exe", "lsass.exe", "spoolsv.exe", 
+                    "explorer.exe", "svchost.exe", "csrss.exe", "smss.exe",
+                    "wininit.exe", "services.exe", "lsass.exe", "spoolsv.exe",
                     "conhost.exe", "winlogon.exe", "taskmgr.exe",
                     "python.exe", "postgres.exe", "node.exe", "chrome.exe",
-                    "firefox.exe", "code.exe", "kiro.exe"
+                    "firefox.exe", "msedge.exe", "brave.exe",
+                    "slack.exe", "teams.exe", "zoom.exe", "discord.exe",
+                    "winrar.exe", "7z.exe", "notepad.exe", "notepad++.exe",
                 ]
                 
-                # WHITELIST: Never kill shells spawned by development tools
+                # TIER 2: Development tools - spawn patterns are LEGITIMATE
                 safe_parent_processes = [
                     "code.exe", "kiro.exe", "devenv.exe", "pycharm",
-                    "idea", "webstorm", "rider", "goland",
-                    "windowsterminal.exe", "conhost.exe"
+                    "idea", "webstorm", "rider", "goland", "clion",
+                    "opencode.exe", "opencode", "cursor.exe",
+                    "windowsterminal.exe", "wt.exe", "conhost.exe",
+                    "powershell.exe", "cmd.exe", "bash.exe", "wsl.exe",
                 ]
+                
+                # DEV TOOL SPAWN EXCEPTIONS: Only flag if MALICIOUS COMMAND present
+                child_cmd_lower = (evt.child_cmd or "").lower()
+                is_dev_spawn = any(safe_parent in parent_name for safe_parent in safe_parent_processes)
+                has_malicious_cmd = any(p in child_cmd_lower for p in [
+                    "downloadstring", "invoke-webrequest", "iwr ", "wget ",
+                    "invoke-expression", "iex(", "frombase64string", "-encodedcommand"
+                ])
+                
+                # If dev tool spawn AND no malicious command, REDUCE score significantly
+                if is_dev_spawn and not has_malicious_cmd:
+                    logger.info(f"[DEV-TOOL] Legitimate spawn: {parent_name} -> {child_name}, reducing score")
+                    fused["final_score"] = min(fused.get("final_score", 0) * 0.2, 0.3)
+                    fused["decision"] = "NORMAL"
+                    fused["rule"] = "dev_tool_legitimate_spawn"
+                    should_kill = False
                 
                 child_name = (evt.child_process or "").split("\\")[-1].lower()
                 parent_name = (evt.parent_process or "").split("\\")[-1].lower()
@@ -934,10 +1457,10 @@ class Layer2RuntimeEngine:
                         logger.warning(f"🛡️  Process spawned by IDE/terminal ({parent_name}) was spared from kill.")
                     should_kill = False
 
-                # Protect VS Code terminal integration
+                # Protect IDE terminal integration
                 child_cmd_lower = (evt.child_cmd or "").lower()
                 if child_name in ["powershell.exe", "pwsh.exe", "cmd.exe"]:
-                    if "vscode" in child_cmd_lower or "shellintegration" in child_cmd_lower or "kiro" in child_cmd_lower:
+                    if any(x in child_cmd_lower for x in ["vscode", "shellintegration", "kiro", "opencode"]):
                         if should_kill:
                             logger.warning("🛡️  Protected IDE terminal shell from being killed.")
                         should_kill = False
@@ -950,7 +1473,7 @@ class Layer2RuntimeEngine:
 
                 # IMPROVED: Suspend + Quarantine instead of Kill
                 suspended = False
-                if is_kill_enabled and should_kill:
+                if is_auto_response and is_kill_enabled and should_kill:
                     pid = evt.child_pid
                     if pid:
                         try:
@@ -959,7 +1482,7 @@ class Layer2RuntimeEngine:
                             suspended = IsolationService.suspend_process(int(pid))
                             
                             if suspended:
-                                logger.error(f"✅ Process SUSPENDED successfully: {child_name} (PID={pid})")
+                                logger.error(f"  Process SUSPENDED successfully: {child_name} (PID={pid})")
                                 logger.info(f"   Process can be resumed with: IsolationService.resume_process({pid})")
                             else:
                                 logger.error(f"❌ Failed to suspend process: {child_name} (PID={pid})")
@@ -968,7 +1491,7 @@ class Layer2RuntimeEngine:
                                     logger.error(f"⚠️  CRITICAL THREAT - Attempting to KILL process")
                                     killed = IsolationService.kill_process(int(pid), force=True)
                                     if killed:
-                                        logger.error(f"✅ Process KILLED: {child_name} (PID={pid})")
+                                        logger.error(f"  Process KILLED: {child_name} (PID={pid})")
                                     else:
                                         logger.error(f"❌ Failed to kill process: {child_name} (PID={pid})")
                         except Exception as k_ex:
@@ -980,7 +1503,7 @@ class Layer2RuntimeEngine:
 
                 quarantine_result = {"quarantined": False, "reason": "not_attempted"}
                 
-                if is_quarantine_enabled:
+                if is_auto_response and is_quarantine_enabled:
                     paths_to_check = []
                     if evt.target_path: paths_to_check.append(evt.target_path)
                     
@@ -1098,7 +1621,7 @@ class Layer2RuntimeEngine:
                             
                             db.add(incident)
                             db.commit()
-                            logger.warning(f"🚨 Created incident: {evt.session_id} ({severity.value}, confidence={incident.confidence:.2f})")
+                            logger.warning(f"  Created incident: {evt.session_id} ({severity.value}, confidence={incident.confidence:.2f})")
                         
                     except Exception as incident_error:
                         logger.error(f"❌ Failed to create/update incident: {incident_error}")

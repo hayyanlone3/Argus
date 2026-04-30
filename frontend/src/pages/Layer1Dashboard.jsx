@@ -51,7 +51,7 @@ export default function Layer1Dashboard() {
                 </svg>
               </div>
               <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
-                Layer 1 <span className="text-slate-300 mx-2"></span> Graph Engine
+                 Graph Engine
               </h1>
             </div>
             <p className="text-slate-500 text-sm md:text-base font-medium ml-11">

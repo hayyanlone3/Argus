@@ -2,15 +2,13 @@
   <EventFiltering>
 
     <!-- Process Creation (reduced noise, security-relevant children) -->
-    <!-- Process Creation (Catch everything except extremely noisy system processes) -->
     <ProcessCreate onmatch="exclude">
       <Image condition="is">C:\Windows\System32\conhost.exe</Image>
       <Image condition="is">C:\Windows\System32\SearchFilterHost.exe</Image>
       <Image condition="is">C:\Windows\System32\SearchProtocolHost.exe</Image>
     </ProcessCreate>
 
-    <!-- File Creation (IMPORTANT) -->
-    <!-- Optimized: high-signal malware-relevant file types (low noise) -->
+    <!-- File Creation (high-signal malware-relevant file types) -->
     <FileCreate onmatch="include">
       <TargetFilename condition="end with">.exe</TargetFilename>
       <TargetFilename condition="end with">.dll</TargetFilename>
@@ -35,6 +33,57 @@
 
       <TargetFilename condition="end with">.txt</TargetFilename>
     </FileCreate>
+
+    <!-- Registry Modification (persistence, defense evasion) -->
+    <RegistryEvent onmatch="include">
+      <!-- Run/RunOnce keys -->
+      <TargetObject condition="contains">\CurrentVersion\Run</TargetObject>
+      <TargetObject condition="contains">\CurrentVersion\RunOnce</TargetObject>
+      <TargetObject condition="contains">\CurrentVersion\RunOnceEx</TargetObject>
+
+      <!-- Service manipulation -->
+      <TargetObject condition="contains">\CurrentControlSet\Services</TargetObject>
+
+      <!-- Image File Execution Options (IFEO hijack) -->
+      <TargetObject condition="contains">Image File Execution Options</TargetObject>
+
+      <!-- AMSI providers -->
+      <TargetObject condition="contains">AMSI</TargetObject>
+
+      <!-- Safe Mode boot -->
+      <TargetObject condition="contains">SafeBoot</TargetObject>
+
+      <!-- Winlogon shell/userinit -->
+      <TargetObject condition="contains">Winlogon\Shell</TargetObject>
+      <TargetObject condition="contains">Winlogon\Userinit</TargetObject>
+      <TargetObject condition="contains">Winlogon\Notify</TargetObject>
+    </RegistryEvent>
+
+    <!-- Network Connections (C2 communication, lateral movement) -->
+    <NetworkConnect onmatch="exclude">
+      <!-- Exclude extremely noisy but benign processes -->
+      <Image condition="is">C:\Windows\System32\svchost.exe</Image>
+      <Image condition="is">C:\Windows\System32\dns.exe</Image>
+    </NetworkConnect>
+
+    <!-- Process Access / Injection -->
+    <ProcessAccess onmatch="include">
+      <CallTrace condition="contains">powershell</CallTrace>
+      <CallTrace condition="contains">cmd</CallTrace>
+      <CallTrace condition="contains">vbscript</CallTrace>
+      <CallTrace condition="contains">jscript</CallTrace>
+    </ProcessAccess>
+
+    <!-- Remote Thread Creation (injection technique) -->
+    <CreateRemoteThread onmatch="include">
+      <SourceImage condition="contains">powershell</SourceImage>
+      <SourceImage condition="contains">cmd</SourceImage>
+      <SourceImage condition="contains">wscript</SourceImage>
+      <SourceImage condition="contains">cscript</SourceImage>
+      <SourceImage condition="contains">mshta</SourceImage>
+      <SourceImage condition="contains">rundll32</SourceImage>
+      <SourceImage condition="contains">regsvr32</SourceImage>
+    </CreateRemoteThread>
 
   </EventFiltering>
 </Sysmon>

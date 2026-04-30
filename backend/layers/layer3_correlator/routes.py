@@ -45,12 +45,14 @@ async def list_incidents(
     limit: int = Query(100, ge=1, le=1000)
 ):
     """
-    List all incidents (optionally filter by severity/status).
+    List all incidents with enriched process chain data.
     
     Example:
         GET /api/layer3/incidents?severity=CRITICAL&limit=50
     """
     try:
+        from backend.database.models import Node
+        
         query = db.query(Incident)
         
         if severity:
@@ -61,15 +63,46 @@ async def list_incidents(
         
         incidents = query.order_by(Incident.created_at.desc()).limit(limit).all()
         
-        return {
-            "total": len(incidents),
-            "incidents": [
-                {
-                    **IncidentResponse.from_orm(inc).dict(),
-                    "edge_count": db.query(Edge).filter(Edge.session_id == inc.session_id).count()
+        result_incidents = []
+        for inc in incidents:
+            edges = db.query(Edge).filter(Edge.session_id == inc.session_id).order_by(Edge.timestamp.asc()).all()
+            
+            process_chain = []
+            max_score = 0.0
+            for edge in edges:
+                src = db.query(Node).filter(Node.id == edge.source_id).first()
+                tgt = db.query(Node).filter(Node.id == edge.target_id).first()
+                
+                edge_score = 0.0
+                if edge.anomaly_score and edge.anomaly_score > edge_score:
+                    edge_score = edge.anomaly_score
+                if edge.ml_anomaly_score and edge.ml_anomaly_score > edge_score:
+                    edge_score = edge.ml_anomaly_score
+                if edge_score > max_score:
+                    max_score = edge_score
+                
+                chain_entry = {
+                    "edge_type": edge.edge_type.value if edge.edge_type else "unknown",
+                    "parent": src.name if src else "unknown",
+                    "parent_path": src.path if src else None,
+                    "child": tgt.name if tgt else "unknown",
+                    "child_path": tgt.path if tgt else None,
+                    "score": round(edge_score, 3),
+                    "severity": edge.final_severity.value if edge.final_severity else "unknown",
+                    "timestamp": edge.timestamp.isoformat() if edge.timestamp else None,
                 }
-                for inc in incidents
-            ]
+                process_chain.append(chain_entry)
+            
+            result_incidents.append({
+                **IncidentResponse.from_orm(inc).dict(),
+                "edge_count": len(edges),
+                "max_edge_score": round(max_score, 3),
+                "process_chain": process_chain,
+            })
+        
+        return {
+            "total": len(result_incidents),
+            "incidents": result_incidents
         }
     
     except Exception as e:

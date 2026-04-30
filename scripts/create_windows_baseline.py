@@ -102,8 +102,8 @@ def create_windows_baseline(duration_minutes: int = 60):
         session_id="test",
         parent_process="C:\\Windows\\explorer.exe",
         child_process="C:\\Windows\\System32\\cmd.exe",
-        child_cmd="cmd.exe /c powershell -enc SGVsbG8gV29ybGQ=",  # Base64
-        file_entropy=7.9  # High entropy
+        child_cmd="cmd.exe /c powershell -enc SGVsbG8gV29ybGQ=",
+        file_entropy=7.9
     )
     
     suspicious_feats = layer_c_features(suspicious_evt, a_score=0.85, b_score=0.7)
@@ -113,9 +113,9 @@ def create_windows_baseline(duration_minutes: int = 60):
     logger.info(f"Suspicious event anomaly score: {suspicious_score:.3f}")
     
     if suspicious_score > normal_score:
-        logger.info("✅ Baseline working correctly - suspicious > normal")
+        logger.info("Baseline working correctly - suspicious > normal")
     else:
-        logger.warning("   Baseline may need more training data")
+        logger.warning("Baseline may need more training data")
     
     # Save Windows-native model
     model_path = Path("backend/ml/models/river_windows_baseline.pkl")
@@ -124,9 +124,9 @@ def create_windows_baseline(duration_minutes: int = 60):
     with open(model_path, 'wb') as f:
         pickle.dump(model, f)
     
-    logger.info(f"✅ Windows baseline saved to {model_path}")
-    logger.info(f"  Processed {events_processed} events")
-    logger.info("  Update runtime_engine.py to use 'river_windows_baseline.pkl'")
+    logger.info(f"Windows baseline saved to {model_path}")
+    logger.info(f"Processed {events_processed} events")
+    logger.info("Update runtime_engine.py to use 'river_windows_baseline.pkl'")
     
     return model
 

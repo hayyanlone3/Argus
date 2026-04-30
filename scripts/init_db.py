@@ -1,13 +1,3 @@
-#!/usr/bin/env python
-# scripts/init_db.py
-"""
-Database initialization script.
-Creates all tables and verifies connection.
-
-Usage:
-    python scripts/init_db.py
-"""
-
 import os
 import sys
 
@@ -23,10 +13,6 @@ logger = setup_logger(__name__)
 
 if __name__ == "__main__":
     try:
-        print("\n" + "="*80)
-        print("ARGUS v2.2 — Database Initialization")
-        print("="*80 + "\n")
-        
         # Initialize database connection and create tables
         init_db()
         
@@ -40,15 +26,6 @@ if __name__ == "__main__":
         
         # Create sample data
         create_sample_data()
-        
-        print("\n" + "="*80)
-        print("🎉 DATABASE INITIALIZATION COMPLETE!")
-        print("="*80 + "\n")
-        print("Next steps:")
-        print("  1. Start backend: python -m uvicorn main:app --reload")
-        print("  2. Access API: http://localhost:8000/docs")
-        print("  3. Test health: curl http://localhost:8000/health")
-        print("\n")
         
     except Exception as e:
         logger.error(f"  Initialization failed: {e}")

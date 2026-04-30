@@ -1,0 +1,183 @@
+================================================================================
+MALWARE SIMULATIONS - FILES OVERVIEW
+================================================================================
+
+EXECUTABLE MALWARE SAMPLES (Python)
+================================================================================
+
+malware_sample_1.py
+  - Process Injection Attack
+  - Spawns 5 cmd.exe processes
+  - Expected: 5-10 CRITICAL alerts
+  - Run: python malware_sample_1.py
+
+malware_sample_2.py
+  - Registry Persistence & Encryption
+  - Modifies registry + encrypts files
+  - Expected: 10-15 CRITICAL alerts
+  - Run: python malware_sample_2.py
+
+malware_sample_3.py
+  - PowerShell & Lateral Movement
+  - PowerShell commands + network recon
+  - Expected: 8-12 CRITICAL alerts
+  - Run: python malware_sample_3.py
+
+1-CLICK BATCH LAUNCHERS (Windows)
+================================================================================
+
+RUN_MALWARE_1.bat
+  - Launches malware_sample_1.py
+  - Double-click to run
+  - Shows progress in console
+  - Pauses at end for review
+
+RUN_MALWARE_2.bat
+  - Launches malware_sample_2.py
+  - Double-click to run
+  - Shows progress in console
+  - Pauses at end for review
+
+RUN_MALWARE_3.bat
+  - Launches malware_sample_3.py
+  - Double-click to run
+  - Shows progress in console
+  - Pauses at end for review
+
+RUN_ALL_MALWARE.bat
+  - Runs all 3 samples sequentially
+  - Double-click to run
+  - Shows progress for each sample
+  - Pauses at end for review
+
+DOCUMENTATION
+================================================================================
+
+00_START_HERE.txt
+  - Quick start guide
+  - What to do first
+  - 2-minute read
+  - START HERE!
+
+QUICK_START.txt
+  - Detailed step-by-step guide
+  - Troubleshooting tips
+  - Performance metrics
+  - 5-minute read
+
+README.md
+  - Full documentation
+  - All available options
+  - Customization guide
+  - 10-minute read
+
+FINAL_SUMMARY.md
+  - Complete delivery summary
+  - All files explained
+  - Expected results
+  - 5-minute read
+
+FILES_OVERVIEW.txt
+  - This file
+  - Quick reference
+
+LEGACY FILES (Optional)
+================================================================================
+
+aggressive_malware.py
+  - Original comprehensive simulation
+  - 10 attack techniques
+  - Event-based (not executable)
+  - Use: python -m simulations.aggressive_malware
+
+run_malware_sim.py
+  - Python runner for aggressive_malware.py
+  - Use: python run_malware_sim.py
+
+run_simulation.bat
+  - Batch launcher for aggressive_malware.py
+  - Use: Double-click
+
+run_simulation.sh
+  - Shell launcher for aggressive_malware.py
+  - Use: bash run_simulation.sh
+
+SUMMARY.md
+  - Overview of aggressive_malware.py
+  - System architecture
+  - 10-minute read
+
+USAGE_GUIDE.md
+  - Comprehensive guide for aggressive_malware.py
+  - Advanced usage
+  - 15-minute read
+
+INDEX.md
+  - Navigation guide for aggressive_malware.py
+  - File structure
+  - 5-minute read
+
+__init__.py
+  - Python package initialization
+  - Required for imports
+
+QUICK REFERENCE
+================================================================================
+
+FASTEST WAY TO RUN:
+  1. Make sure backend is running
+  2. Double-click: RUN_ALL_MALWARE.bat
+  3. Open: http://localhost:3000
+  4. Check Layer 2 for alerts
+
+EXPECTED RESULTS:
+  - 23-37 CRITICAL alerts
+  - Fusion scores: 0.8-1.0
+  - Detection latency: <1 second
+  - Execution time: 8-11 seconds
+
+TROUBLESHOOTING:
+  - No detections? → Check backend is running
+  - Batch won't run? → Try: python malware_sample_1.py
+  - Low scores? → Wait 10-15 seconds for correlation
+
+FILE STATISTICS
+================================================================================
+
+Total Files: 18
+  - Executable Samples: 3 (Python)
+  - Batch Launchers: 4 (Windows)
+  - Documentation: 5 (Markdown/Text)
+  - Legacy Files: 6 (Optional)
+
+Total Size: ~50 KB
+Total Lines of Code: ~500
+
+RECOMMENDED READING ORDER
+================================================================================
+
+1. 00_START_HERE.txt (2 min)
+   → Quick overview and how to start
+
+2. QUICK_START.txt (5 min)
+   → Detailed step-by-step guide
+
+3. README.md (10 min)
+   → Full documentation
+
+4. FINAL_SUMMARY.md (5 min)
+   → Complete delivery summary
+
+5. FILES_OVERVIEW.txt (5 min)
+   → This file - quick reference
+
+NEXT STEPS
+================================================================================
+
+1. Read: 00_START_HERE.txt
+2. Run: RUN_ALL_MALWARE.bat (double-click)
+3. Monitor: http://localhost:3000
+4. Review: Layer 2 alerts
+5. Analyze: Detection results
+
+================================================================================

@@ -115,7 +115,7 @@ def create_sample_data():
 
 if __name__ == "__main__":
     logger.info("")
-    logger.info("ARGUS v2.2 Database Initialization")
+    logger.info("ARGUS Database Initialization")
     logger.info("=" * 80)
     logger.info("")
     

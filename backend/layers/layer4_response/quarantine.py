@@ -158,19 +158,7 @@ class QuarantineService:
     
     @staticmethod
     def list_quarantine(db: Session, limit: int = 100) -> dict:
-        """
-        List all quarantined files.
-        
-        Args:
-            db: Database session
-            limit: Maximum results
-            
-        Returns:
-            {
-                "total": int,
-                "quarantined": [Quarantine]
-            }
-        """
+
         try:
             quarantined = db.query(Quarantine).filter(
                 Quarantine.status == "QUARANTINED"

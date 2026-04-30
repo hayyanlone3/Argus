@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
     # STARTUP
     try:
         logger.info("=" * 80)
-        logger.info("ARGUS v2.2 Backend Initializing...")
+        logger.info("ARGUS Backend Initializing...")
         logger.info("=" * 80)
 
         init_db()
@@ -121,7 +121,7 @@ async def lifespan(app: FastAPI):
     logger.info("ARGUS Backend shutting down...")
 
 app = FastAPI(
-    title="ARGUS v2.2",
+    title="ARGUS",
     description="Provenance Graph Anomaly Detection System",
     version="2.2.0",
     docs_url="/docs",

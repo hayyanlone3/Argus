@@ -24,7 +24,7 @@ class IsolationService:
                 import psutil
                 process = psutil.Process(process_id)
                 process.suspend()
-                logger.info(f"✅ Process SUSPENDED: PID {process_id} ({process.name()})")
+                logger.info(f"  Process SUSPENDED: PID {process_id} ({process.name()})")
                 return True
                 
             except psutil.NoSuchProcess:
@@ -56,7 +56,7 @@ class IsolationService:
                 import psutil
                 process = psutil.Process(process_id)
                 process.resume()
-                logger.info(f"✅ Process RESUMED: PID {process_id} ({process.name()})")
+                logger.info(f"  Process RESUMED: PID {process_id} ({process.name()})")
                 return True
                 
             except psutil.NoSuchProcess:

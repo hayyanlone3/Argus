@@ -1,0 +1,112 @@
+================================================================================
+🔴 ARGUS MALWARE SIMULATIONS - START HERE
+================================================================================
+
+WHAT YOU NEED TO DO:
+
+1. Make sure ARGUS backend is running:
+   - Open terminal
+   - cd backend
+   - python main.py
+   - Wait for "API running on 0.0.0.0:8000"
+
+2. Double-click ONE of these files:
+   ✓ RUN_MALWARE_1.bat (Process Injection)
+   ✓ RUN_MALWARE_2.bat (Registry Persistence & Encryption)
+   ✓ RUN_MALWARE_3.bat (PowerShell & Lateral Movement)
+   ✓ RUN_ALL_MALWARE.bat (Run all 3 samples)
+
+3. Open dashboard:
+   - Go to http://localhost:3000
+   - Check Layer 2 for CRITICAL alerts
+
+THAT'S IT! 🎯
+
+================================================================================
+WHAT HAPPENS
+================================================================================
+
+When you run a malware sample:
+
+✓ Malware executes suspicious commands
+✓ Sysmon captures the events
+✓ Layer 2 detects the attacks
+✓ Dashboard shows CRITICAL alerts
+✓ Fusion scores: 0.8-1.0
+
+Expected: 45-55 CRITICAL alerts total
+
+================================================================================
+MALWARE SAMPLES
+================================================================================
+
+RUN_MALWARE_1.bat
+  - Process Injection Attack
+  - Spawns 5 cmd.exe processes
+  - Expected: 5-10 alerts
+  - Time: 2-3 seconds
+
+RUN_MALWARE_2.bat
+  - Registry Persistence & Encryption
+  - Modifies registry + encrypts files
+  - Expected: 10-15 alerts
+  - Time: 3-4 seconds
+
+RUN_MALWARE_3.bat
+  - PowerShell & Lateral Movement
+  - PowerShell commands + network recon
+  - Expected: 8-12 alerts
+  - Time: 3-4 seconds
+
+RUN_ALL_MALWARE.bat
+  - Runs all 3 samples sequentially
+  - Expected: 23-37 alerts
+  - Time: 8-11 seconds
+
+================================================================================
+QUICK TROUBLESHOOTING
+================================================================================
+
+No detections?
+  → Verify backend is running: curl http://localhost:8000/health
+  → Check Layer 2: curl http://localhost:8000/api/layer2/health
+
+Batch file won't run?
+  → Make sure Python is installed
+  → Make sure backend is running
+  → Try from command line: python malware_sample_1.py
+
+Low scores?
+  → Wait 10-15 seconds for correlation
+  → Run multiple samples
+
+================================================================================
+FILES IN THIS FOLDER
+================================================================================
+
+Executable Malware Samples:
+  - malware_sample_1.py
+  - malware_sample_2.py
+  - malware_sample_3.py
+
+1-Click Batch Launchers:
+  - RUN_MALWARE_1.bat
+  - RUN_MALWARE_2.bat
+  - RUN_MALWARE_3.bat
+  - RUN_ALL_MALWARE.bat
+
+Documentation:
+  - 00_START_HERE.txt (this file)
+  - QUICK_START.txt (detailed guide)
+  - README.md (full documentation)
+
+================================================================================
+READY? LET'S GO!
+================================================================================
+
+1. Make sure backend is running
+2. Double-click RUN_ALL_MALWARE.bat
+3. Open http://localhost:3000
+4. Watch the alerts appear! 🎯
+
+================================================================================

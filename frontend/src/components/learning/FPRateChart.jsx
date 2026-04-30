@@ -1,4 +1,3 @@
-// src/components/learning/FPRateChart.jsx
 import React, { useEffect, useState } from 'react';
 import { learningService } from '../../services/learningService';
 import LoadingSpinner from '../common/LoadingSpinner';

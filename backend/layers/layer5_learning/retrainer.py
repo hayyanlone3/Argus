@@ -225,23 +225,19 @@ class RetrainingService:
     
     @staticmethod
     def retrain_model(db: Session) -> dict:
-        try:
-            logger.info("=" * 80)
-            logger.info("  WEEKLY RETRAINING STARTING")
-            logger.info("=" * 80)
-            
+        try:            
             # Step 1: Collect weekly data
             weekly_data = RetrainingService.get_weekly_data(db)
             
             # Step 2: Evaluate quality
             quality_eval = RetrainingService.evaluate_model_quality(weekly_data)
             
-            logger.info(f"  Quality Score: {quality_eval['quality_score']:.1f}/100")
-            logger.info(f"   FP Rate: {quality_eval['fp_rate']:.1f}%")
+            logger.info(f"Quality Score: {quality_eval['quality_score']:.1f}/100")
+            logger.info(f"FP Rate: {quality_eval['fp_rate']:.1f}%")
             
             # Step 3: Check if retraining should proceed
             if quality_eval["fp_rate"] > settings.learning_fp_rate_threshold * 100:
-                logger.warning(f"   FP rate too high ({quality_eval['fp_rate']:.1f}%), rejecting new model")
+                logger.warning(f"FP rate too high ({quality_eval['fp_rate']:.1f}%), rejecting new model")
                 return {
                     "status": "rejected",
                     "reason": f"FP rate threshold exceeded ({quality_eval['fp_rate']:.1f}%)",
@@ -251,18 +247,14 @@ class RetrainingService:
             
             # Step 4: In production, would retrain models here
             # For now: log what would happen
-            logger.info("🚀 Would retrain here:")
-            logger.info(f"   - River HalfSpaceTrees: {len(weekly_data['incidents'])} samples")
-            logger.info(f"   - BETH baseline: Update with {weekly_data['tp_count']} TPs")
-            logger.info(f"   - P-matrix: Recalibrate from {len(weekly_data['feedbacks'])} feedback")
+            logger.info("Would retrain here:")
+            logger.info(f"River HalfSpaceTrees: {len(weekly_data['incidents'])} samples")
+            logger.info(f"BETH baseline: Update with {weekly_data['tp_count']} TPs")
+            logger.info(f"P-matrix: Recalibrate from {len(weekly_data['feedbacks'])} feedback")
             
             # Step 5: Validation
             logger.info("  Model validation passed")
-            
-            logger.info("=" * 80)
-            logger.info("🎉 WEEKLY RETRAINING COMPLETED SUCCESSFULLY")
-            logger.info("=" * 80)
-            
+
             return {
                 "status": "completed",
                 "reason": "Model retrained and validated",

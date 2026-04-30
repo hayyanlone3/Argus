@@ -1,0 +1,150 @@
+================================================================================
+ARGUS MALWARE SIMULATIONS - QUICK START
+================================================================================
+
+WHAT IS THIS?
+This folder contains 3 executable malware samples that trigger Layer 2 detection.
+
+HOW TO USE (1-CLICK EXECUTION)
+================================================================================
+
+OPTION 1: Run Individual Malware Samples
+  1. Double-click any of these files:
+     - RUN_MALWARE_1.bat (Process Injection)
+     - RUN_MALWARE_2.bat (Registry Persistence & Encryption)
+     - RUN_MALWARE_3.bat (PowerShell & Lateral Movement)
+
+OPTION 2: Run All Malware Samples
+  1. Double-click: RUN_ALL_MALWARE.bat
+  2. This runs all 3 samples sequentially
+
+OPTION 3: Run from Command Line
+  python malware_sample_1.py
+  python malware_sample_2.py
+  python malware_sample_3.py
+
+================================================================================
+PREREQUISITES
+================================================================================
+
+1. ARGUS Backend Running
+   - Open terminal
+   - cd backend
+   - python main.py
+   - Wait for: "API running on 0.0.0.0:8000"
+
+2. Sysmon Running
+   - Sysmon must be installed and running
+   - Check: Get-Service Sysmon
+
+3. Dashboard Ready
+   - Open http://localhost:3000 in browser
+
+================================================================================
+MALWARE SAMPLES
+================================================================================
+
+SAMPLE 1: Process Injection
+  File: RUN_MALWARE_1.bat or malware_sample_1.py
+  Attack: Spawns 5 cmd.exe processes with suspicious commands
+  Expected: 5-10 CRITICAL alerts
+  Time: 2-3 seconds
+
+SAMPLE 2: Registry Persistence & Encryption
+  File: RUN_MALWARE_2.bat or malware_sample_2.py
+  Attack: Modifies registry + encrypts files
+  Expected: 10-15 CRITICAL alerts
+  Time: 3-4 seconds
+
+SAMPLE 3: PowerShell & Lateral Movement
+  File: RUN_MALWARE_3.bat or malware_sample_3.py
+  Attack: PowerShell commands + network reconnaissance
+  Expected: 8-12 CRITICAL alerts
+  Time: 3-4 seconds
+
+================================================================================
+EXPECTED RESULTS
+================================================================================
+
+When you run a malware sample:
+
+1. Console shows execution progress
+2. Dashboard shows CRITICAL alerts
+3. Fusion scores: 0.8-1.0
+4. Detection latency: <1 second
+
+Check dashboard at: http://localhost:3000
+
+================================================================================
+STEP-BY-STEP GUIDE
+================================================================================
+
+Step 1: Start Backend
+  - Open terminal
+  - cd backend
+  - python main.py
+  - Wait for "API running on 0.0.0.0:8000"
+
+Step 2: Run Malware Sample
+  - Double-click RUN_MALWARE_1.bat (or any sample)
+  - Watch console output
+
+Step 3: Check Dashboard
+  - Open http://localhost:3000
+  - Go to Layer 2 dashboard
+  - See CRITICAL alerts
+
+Step 4: Review Results
+  - Check fusion scores (0.8-1.0)
+  - Verify detection latency (<1 second)
+  - Review attack techniques detected
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+No detections?
+  1. Verify backend: curl http://localhost:8000/health
+  2. Check Layer 2: curl http://localhost:8000/api/layer2/health
+  3. Check events: curl http://localhost:8000/api/layer2/live/latest
+
+Low scores?
+  1. Wait 10-15 seconds for correlation
+  2. Check ML models in backend logs
+  3. Run multiple samples
+
+Batch file won't run?
+  1. Make sure Python is installed
+  2. Make sure backend is running
+  3. Try running from command line instead
+
+================================================================================
+PERFORMANCE
+================================================================================
+
+Sample 1: ~15 events, 2-3 seconds, 5-10 alerts
+Sample 2: ~20 events, 3-4 seconds, 10-15 alerts
+Sample 3: ~18 events, 3-4 seconds, 8-12 alerts
+All 3:    ~53 events, 8-11 seconds, 23-37 alerts
+
+================================================================================
+NOTES
+================================================================================
+
+✓ These are simulations only - no actual malware
+✓ Safe to run multiple times
+✓ Sysmon must be running to collect events
+✓ Backend must be running before executing
+✓ Use for testing and demonstration only
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+1. Double-click RUN_ALL_MALWARE.bat
+2. Open http://localhost:3000
+3. Review Layer 2 alerts
+4. Check Layer 3 correlation
+5. Verify Layer 4 response
+
+================================================================================

@@ -132,7 +132,6 @@ export default function Layer4Dashboard() {
               <span className="font-mono text-sm text-slate-700 truncate" title={quarantineDir}>{quarantineDir}</span>
             </div>
           }
-          hint="Files moved here are safe from execution."
         />
         
         <InfoCard
@@ -200,31 +199,36 @@ export default function Layer4Dashboard() {
 
       {/* Tab Content Area */}
       {activeTab === 'quarantine' && (
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          <div className="xl:col-span-2 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden flex flex-col h-full">
-            <div className="p-6 bg-white flex-grow">
-              <QuarantineList />
+        <div className="flex justify-center w-full">
+          
+            
+            <div className="px-2 pb-6 overflow-x-auto">
+              <div className="rounded-lg border-2 border-slate-300 bg-white shadow-inner">
+                {/* Enhanced table visuals for QuarantineList */}
+                <div className="overflow-x-auto">
+                  <div className="min-w-full">
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-100 border-b-2 border-slate-300">
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <QuarantineList
+                          renderRow={filePath => (
+                            <tr key={filePath} className="even:bg-slate-50 odd:bg-white border-b border-slate-200 hover:bg-blue-50 transition">
+                              <td className="px-4 py-2 font-mono text-xs text-slate-800 whitespace-nowrap max-w-[500px] overflow-hidden text-ellipsis" title={filePath}>
+                                {filePath}
+                              </td>
+                            </tr>
+                          )}
+                        />
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-
-          <div className="xl:col-span-1 space-y-6">
-            <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-              <h3 className="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
-                <Database className="h-5 w-5 text-indigo-500" />
-                Storage Location
-              </h3>
-              <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 mb-4">
-                <span className="font-mono text-xs text-slate-700 break-all">{quarantineDir}</span>
-              </div>
-              <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-lg border border-amber-200">
-                <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0" />
-                <p className="text-xs font-medium text-amber-800 leading-relaxed">
-                  Keep this folder ACL-restricted.
-                </p>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
 
       {activeTab === 'whitelist' && (

@@ -7,21 +7,11 @@
 import apiClient from '../config/api';
 
 export const quarantineService = {
-  // ═══════════════════════════════════════════════════════════════
-  // QUARANTINE OPERATIONS
-  // ═══════════════════════════════════════════════════════════════
-
-  /**
-   * Quarantine a file
-   */
   quarantineFile: async (quarantineData) => {
     const response = await apiClient.post('/layer4/quarantine', quarantineData);
     return response.data;
   },
 
-  /**
-   * Get all quarantined files
-   */
   getQuarantined: async (limit = 100) => {
     const response = await apiClient.get('/layer4/quarantine', { params: { limit } });
     return response.data;
@@ -83,29 +73,16 @@ export const quarantineService = {
     return stats.by_detection_layer || {};
   },
 
-  // ═══════════════════════════════════════════════════════════════
-  // FILTERS
-  // ═══════════════════════════════════════════════════════════════
-
-  /**
-   * Filter quarantined files by hash
-   */
   filterByHash: async (hash, limit = 100) => {
     const all = await quarantineService.getQuarantined(limit);
     return all.quarantine.filter((q) => q.hash_sha256 === hash);
   },
 
-  /**
-   * Filter quarantined files by path
-   */
   filterByPath: async (path, limit = 100) => {
     const all = await quarantineService.getQuarantined(limit);
     return all.quarantine.filter((q) => q.original_path.includes(path));
   },
 
-  /**
-   * Filter quarantined files by layer
-   */
   filterByLayer: async (layer, limit = 100) => {
     const all = await quarantineService.getQuarantined(limit);
     return all.quarantine.filter((q) => q.detection_layer === layer);

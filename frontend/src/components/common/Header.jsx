@@ -9,7 +9,7 @@ export default function Header() {
         <div className="flex items-center gap-3">
           </div>
           <div>
-            <h1 className="text-2xl font-bold">ARGUS v2.2</h1>
+            <h1 className="text-2xl font-bold">ARGUS</h1>
             <p className="text-xs text-gray-400">Provenance Graph Anomaly Detection</p>
           </div>
         </div>

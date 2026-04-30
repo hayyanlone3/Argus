@@ -20,12 +20,12 @@ export default function Sidebar() {
   // Icons meticulously chosen to match the exact function of each layer
   const navItems = [
     { path: '/', label: 'Overview', icon: LayoutDashboard },
-    { path: '/layer0', label: 'Layer 0: Bouncer', icon: Shield },         
-    { path: '/layer1', label: 'Layer 1: Graph', icon: Network }, 
-    { path: '/layer2', label: 'Layer 2: Scoring', icon: Activity },        
-    { path: '/layer3', label: 'Layer 3: Correlator', icon: Waypoints },
-    { path: '/layer4', label: 'Layer 4: Response', icon: Zap },
-    { path: '/layer5', label: 'Layer 5: Learning', icon: BrainCircuit },   
+    { path: '/layer0', label: 'Bouncer', icon: Shield },         
+    { path: '/layer1', label: 'Graph', icon: Network }, 
+    { path: '/layer2', label: 'Scoring', icon: Activity },        
+    { path: '/layer3', label: 'Correlator', icon: Waypoints },
+    { path: '/layer4', label: 'Response', icon: Zap },
+    { path: '/layer5', label: 'Learning', icon: BrainCircuit },   
   ];
 
   return (

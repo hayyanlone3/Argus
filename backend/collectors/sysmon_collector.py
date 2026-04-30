@@ -55,12 +55,12 @@ def _parse_sysmon_xml(xml_str: str) -> Dict[str, Any]:
 class SysmonCollector:
     def __init__(self, poll_seconds: float = 1.0, **kwargs):
         self.poll_seconds = poll_seconds
-        # Accept 'enabled' if passed, otherwise default to Windows check
         passed_enabled = kwargs.get('enabled', True)
         self.enabled = (os.name == 'nt') and passed_enabled
         self._stop = threading.Event()
         self._thread = None
         self._last_record_id = None
+        self._query = None  # Persistent query handle
 
     def start(self):
         if not self.enabled:
@@ -78,26 +78,82 @@ class SysmonCollector:
             self._thread.join(timeout=5)
         logger.info("SysmonCollector stopped")
 
-    def _open_query(self):
-        """Open the Sysmon EvtQuery handle. Returns handle or None on failure."""
-        query_str = f"*[System/Provider/@Name='{PROVIDER_NAME}']"
-        flags = win32evtlog.EvtQueryReverseDirection
+    def _save_record_id(self, rid: int):
+        state_file = os.path.join(os.path.dirname(__file__), ".sysmon_last_rid")
         try:
-            return win32evtlog.EvtQuery(SYS_CHANNEL, flags, query_str)
-        except Exception:
+            with open(state_file, "w") as f:
+                f.write(str(rid))
+        except Exception as e:
+            logger.debug(f"[COLLECTOR] Failed to save RID: {e}")
+
+    def _open_query(self):
+        """Open a forward-direction query filtered to events after last_rid."""
+        if self._last_record_id and self._last_record_id > 0:
+            query_str = f"*[System[(EventRecordID > {self._last_record_id}) and Provider/@Name='{PROVIDER_NAME}']]"
+        else:
+            query_str = f"*[System/Provider/@Name='{PROVIDER_NAME}']"
+        for channel in [SYS_CHANNEL, "Sysmon/Operational"]:
             try:
-                return win32evtlog.EvtQuery("Sysmon/Operational", flags, query_str)
-            except Exception:
-                return None
+                q = win32evtlog.EvtQuery(channel, win32evtlog.EvtQueryForwardDirection, query_str)
+                self._query = q
+                logger.info(f"[COLLECTOR] Opened query on {channel}, RID > {self._last_record_id}")
+                return q
+            except Exception as e:
+                logger.warning(f"[COLLECTOR] Failed to open {channel}: {e}")
+        self._query = None
+        return None
+
+    def _fetch_new_events(self):
+        """Fetch the next batch of new events in forward order."""
+        if self._query is None:
+            self._open_query()
+        if self._query is None:
+            return []
+        try:
+            batch = win32evtlog.EvtNext(self._query, 512)
+            if batch:
+                parsed_events = []
+                for evt in batch:
+                    try:
+                        xml = _evt_xml(evt)
+                        if xml:
+                            parsed = _parse_sysmon_xml(xml)
+                            rid = int(parsed["record_id"])
+                            parsed_events.append((rid, parsed))
+                    except Exception:
+                        continue
+                parsed_events.sort(key=lambda x: x[0])
+                return [p for _, p in parsed_events]
+            self._query = None
+            return []
+        except Exception as e:
+            self._query = None
+            return []
 
     def _run(self):
         iterations = 0
         consecutive_errors = 0
 
-        # Open the query handle ONCE — not on every loop iteration
-        q = self._open_query()
-        if q is None:
-            logger.warning("Sysmon event log not available, disabling collector")
+        # Load last processed RID from state file
+        state_file = os.path.join(os.path.dirname(__file__), ".sysmon_last_rid")
+        try:
+            if os.path.exists(state_file):
+                with open(state_file, "r") as f:
+                    self._last_record_id = int(f.read().strip())
+        except Exception:
+            pass
+        if not self._last_record_id:
+            self._last_record_id = 0
+
+        if self._last_record_id:
+            logger.info(f"[COLLECTOR] Bootstrap: resuming from RID {self._last_record_id}")
+        else:
+            logger.info("[COLLECTOR] Bootstrap: no prior state, starting from oldest")
+
+        # Open persistent query
+        self._open_query()
+        if self._query is None:
+            logger.error("[COLLECTOR] CRITICAL: Sysmon event log not available, disabling collector")
             self.enabled = False
             return
 
@@ -107,61 +163,43 @@ class SysmonCollector:
                 if iterations % 300 == 0:
                     logger.debug("Telemetry sensor heartbeat: Polling...")
 
-                events = win32evtlog.EvtNext(q, 128)
+                events = self._fetch_new_events()
 
                 if not events:
+                    if iterations % 100 == 0:
+                        logger.debug("[COLLECTOR] No new events in this poll")
                     time.sleep(self.poll_seconds)
                     continue
 
-                new_events = []
-                for evt in events:
-                    try:
-                        xml = _evt_xml(evt)
-                        if not xml:
-                            continue
-                        parsed = _parse_sysmon_xml(xml)
-                        rid = int(parsed["record_id"])
-
-                        if self._last_record_id is None:
-                            self._last_record_id = rid - 100
-                            logger.info(f"Telemetry sensor BOOTSTRAPPED with 100-event lookback at RID: {rid}")
-
-                        if rid <= self._last_record_id:
-                            break
-
-                        new_events.append(parsed)
-                    except Exception:
-                        continue
-
-                if new_events:
+                if events:
                     consecutive_errors = 0
-                    if len(new_events) > 10:
-                        logger.info(f"[COLLECTOR] Found {len(new_events)} NEW events")
-                    self._last_record_id = int(new_events[0]["record_id"])
-                    for p in reversed(new_events):
+                    logger.info(f"[COLLECTOR] Processing {len(events)} NEW events")
+                    self._last_record_id = int(events[-1]["record_id"])
+                    self._save_record_id(self._last_record_id)
+                    for p in events:
                         try:
                             self._handle(p["event_id"], p["data"])
                         except Exception as handle_err:
-                            logger.debug(f"Error handling event {p['event_id']}: {handle_err}")
+                            logger.debug(f"[COLLECTOR] Error handling event {p['event_id']}: {handle_err}")
 
                 time.sleep(self.poll_seconds)
 
             except Exception as e:
                 consecutive_errors += 1
-                logger.error(f"SysmonCollector error #{consecutive_errors}: {e}")
+                logger.error(f"[COLLECTOR] ❌ Error #{consecutive_errors}: {e}")
 
                 backoff_time = min(30, self.poll_seconds * (2 ** min(consecutive_errors, 5)))
                 time.sleep(backoff_time)
 
                 if consecutive_errors > 5:
-                    logger.error("Too many consecutive errors, disabling SysmonCollector")
+                    logger.error("[COLLECTOR] ❌ Too many consecutive errors, disabling SysmonCollector")
                     self.enabled = False
                     break
 
                 # Re-open the query handle after error — old handle may be stale
                 q = self._open_query()
                 if q is None:
-                    logger.error("Could not re-open Sysmon query, disabling collector")
+                    logger.error("[COLLECTOR] ❌ Could not re-open Sysmon query, disabling collector")
                     self.enabled = False
                     break
 
@@ -169,11 +207,20 @@ class SysmonCollector:
         if event_id == EV_PROCESS_CREATE:
             self._handle_process_create(data)
         elif event_id == EV_FILE_CREATE:
+            path = data.get("TargetFilename", "unknown")
+            with open(os.path.join(os.path.dirname(__file__), "_debug_fc.log"), "a") as f:
+                f.write(f"{time.time()} FILE_CREATE: {path}\n")
             self._handle_file_create(data)
         elif event_id in [EV_REG_SET, EV_REG_SET_2, EV_REG_SET_3]:
             self._handle_reg_set(data)
         elif event_id == EV_NET_CONN:
             self._handle_net_conn(data)
+        elif event_id == 5:
+            pass  # Process terminate - ignore
+        else:
+            if event_id not in (2, 4, 6, 7, 9, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26):
+                with open(os.path.join(os.path.dirname(__file__), "_debug_fc.log"), "a") as f:
+                    f.write(f"{time.time()} OTHER event_id={event_id}\n")
 
     def _handle_process_create(self, data: Dict[str, Any]):
         try:
@@ -188,7 +235,10 @@ class SysmonCollector:
             suspicious_processes = ["cmd.exe", "powershell.exe", "wscript.exe", "cscript.exe", "rundll32.exe", "regsvr32.exe"]
             if any(proc in image.lower() for proc in suspicious_processes):
                 logger.info(f"[SYSMON] PROCESS_CREATE: {image} ({pid})")
+                logger.info(f"[SYSMON]   Parent: {parent_image}")
+                logger.info(f"[SYSMON]   Command: {cmd[:100] if cmd else 'N/A'}")
             
+            logger.debug(f"[COLLECTOR] Publishing PROCESS_CREATE event: {image}")
             publish_event(TelemetryEvent(
                 event_id=new_event_id(),
                 ts=time.time(),
@@ -204,8 +254,9 @@ class SysmonCollector:
                 child_guid=str(proc_guid) if proc_guid else None,
                 parent_guid=str(parent_guid) if parent_guid else None,
             ))
-        except Exception:
-             logger.exception("Error in process_create handler")
+            logger.info(f"[COLLECTOR] ✅ Event published to queues")
+        except Exception as e:
+             logger.exception(f"[COLLECTOR] ❌ Error in process_create handler: {e}")
 
     def _handle_file_create(self, data: Dict[str, Any]):
         try:
@@ -214,13 +265,16 @@ class SysmonCollector:
             pid = data.get("ProcessId")
             proc_guid = data.get("ProcessGuid")
             
-            # Only log suspicious file operations to reduce noise
+            # Skip known legitimate temporary files
+            if "__psscriptpolicytest_" in path.lower():
+                return
+            
             suspicious_extensions = [".exe", ".dll", ".ps1", ".bat", ".cmd", ".vbs", ".js"]
-            suspicious_paths = ["temp", "appdata", "programdata", "startup"]
+            suspicious_paths = ["temp", "appdata", "programdata", "startup", "simulations"]
             
             if (any(ext in path.lower() for ext in suspicious_extensions) or 
                 any(sp in path.lower() for sp in suspicious_paths)):
-                logger.debug(f"[SYSMON] FILE_CREATE: {path}")
+                logger.info(f"[SYSMON] FILE_CREATE: {path}")
             
             publish_event(TelemetryEvent(
                 event_id=new_event_id(),
