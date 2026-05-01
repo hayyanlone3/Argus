@@ -40,9 +40,8 @@ export default function Layer3Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div>
-        <h1>Layer 3: Correlator</h1>
+        <h1>Correlator</h1>
         <p className="text-gray-600">Group related events into incidents using signals</p>
       </div>
 

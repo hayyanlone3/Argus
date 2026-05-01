@@ -45,10 +45,9 @@ function InfoCard({ title, value, hint }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col h-full">
       <div className="flex items-center gap-2 mb-3">
-        <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
         <div className="text-xs font-bold text-slate-500 tracking-wider uppercase">{title}</div>
       </div>
-      <div className="text-slate-900 font-medium mt-1 flex-grow">{value}</div>
+      <div className="text-slate-900 font-medium mt-1 grow">{value}</div>
       {hint && (
         <div className="mt-4 pt-3 border-t border-slate-100">
           <div className="text-xs font-medium text-slate-500 leading-relaxed">{hint}</div>
@@ -94,7 +93,7 @@ export default function Layer4Dashboard() {
       <div className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-md border border-indigo-300">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-indigo-500 to-purple-600 text-white shadow-md border border-indigo-300">
               <ShieldCheck className="h-6 w-6" />
             </div>
             <div>
@@ -128,7 +127,7 @@ export default function Layer4Dashboard() {
           title="QUARANTINE DIRECTORY"
           value={
             <div className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 flex items-center overflow-hidden">
-              <FolderLock className="h-4 w-4 text-slate-400 mr-2 flex-shrink-0" />
+              <FolderLock className="h-4 w-4 text-slate-400 mr-2 shrink-0" />
               <span className="font-mono text-sm text-slate-700 truncate" title={quarantineDir}>{quarantineDir}</span>
             </div>
           }
@@ -152,7 +151,7 @@ export default function Layer4Dashboard() {
                       checked={!!policy?.auto_response_enabled}
                       onChange={e => updatePolicy({ auto_response_enabled: e.target.checked })}
                     />
-                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500 shadow-inner"></div>
+                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500 shadow-inner"></div>
                   </div>
                   <span className={`text-sm font-bold ${policy?.auto_response_enabled ? "text-red-600" : "text-slate-600 group-hover:text-slate-800"}`}>
                     {policy?.auto_response_enabled ? "Master Switch: ENABLED" : "Master Switch: DISABLED"}
@@ -175,7 +174,6 @@ export default function Layer4Dashboard() {
               </div>
             </div>
           }
-          hint="Least-privilege containment active."
         />
       </div>
 
@@ -216,7 +214,7 @@ export default function Layer4Dashboard() {
                         <QuarantineList
                           renderRow={filePath => (
                             <tr key={filePath} className="even:bg-slate-50 odd:bg-white border-b border-slate-200 hover:bg-blue-50 transition">
-                              <td className="px-4 py-2 font-mono text-xs text-slate-800 whitespace-nowrap max-w-[500px] overflow-hidden text-ellipsis" title={filePath}>
+                              <td className="px-4 py-2 font-mono text-xs text-slate-800 whitespace-nowrap max-w-125 overflow-hidden text-ellipsis" title={filePath}>
                                 {filePath}
                               </td>
                             </tr>
@@ -242,7 +240,7 @@ export default function Layer4Dashboard() {
                 <h2 className="text-lg font-bold text-slate-900">Whitelist Rules</h2>
               </div>
             </div>
-            <div className="p-6 bg-white flex-grow">
+            <div className="p-6 bg-white grow">
               <WhitelistManager />
             </div>
           </div>

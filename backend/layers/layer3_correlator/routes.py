@@ -23,7 +23,6 @@ router = APIRouter()
 
 @router.get("/health")
 async def health():
-    """Layer 3: Correlator health check."""
     return {
         "layer": 3,
         "name": "Correlator",
