@@ -14,7 +14,6 @@ export default function IncidentFeed({ severity = null, limit = 20, showMalwareT
 
   useEffect(() => {
     let mounted = true;
-
     const fetchIncidents = async (initial = false) => {
       try {
         if (initial) setLoading(true);
@@ -38,10 +37,30 @@ export default function IncidentFeed({ severity = null, limit = 20, showMalwareT
     };
 
     fetchIncidents(true);
-    const interval = setInterval(() => fetchIncidents(false), 10000);
+
+    // Open SSE stream for real-time incident pushes
+    const es = new EventSource('/api/layer3/incidents/stream');
+    es.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        if (!mounted) return;
+        setIncidents(prev => {
+          // prepend and dedupe by session_id
+          const next = [data, ...prev.filter(i => i.session_id !== data.session_id)];
+          return next.slice(0, limit);
+        });
+      } catch (err) {
+        console.error('SSE parse error', err);
+      }
+    };
+    es.onerror = (err) => {
+      // If SSE fails, keep UI working — we silently fallback to periodic refresh via occasional fetch
+      console.warn('SSE connection error', err);
+    };
+
     return () => {
       mounted = false;
-      clearInterval(interval);
+      try { es.close(); } catch (e) {}
     };
   }, [severity, limit, statusFilter, malwareOnly]);
 

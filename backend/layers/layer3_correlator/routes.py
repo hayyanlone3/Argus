@@ -1,9 +1,3 @@
-# backend/layers/layer3_correlator/routes.py
-"""
-Layer 3: Correlator API Endpoints
-Provides incident management endpoints
-"""
-
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from backend.database.connection import get_db
@@ -13,8 +7,10 @@ from backend.database.schemas import (
 )
 from .services import CorrelatorService
 from .narrative import NarrativeGenerator
+from . import broadcaster as sse_broadcaster
 from backend.shared.logger import setup_logger
 from datetime import datetime
+import json
 
 logger = setup_logger(__name__)
 
@@ -43,12 +39,7 @@ async def list_incidents(
     status: str = Query(None),
     limit: int = Query(100, ge=1, le=1000)
 ):
-    """
-    List all incidents with enriched process chain data.
-    
-    Example:
-        GET /api/layer3/incidents?severity=CRITICAL&limit=50
-    """
+
     try:
         from backend.database.models import Node
         
@@ -114,12 +105,7 @@ async def get_incident(
     session_id: str,
     db: Session = Depends(get_db)
 ):
-    """
-    Get single incident with all related edges and nodes.
-    
-    Example:
-        GET /api/layer3/incidents/abc123-def456
-    """
+
     try:
         incident = db.query(Incident).filter(Incident.session_id == session_id).first()
         
@@ -153,22 +139,35 @@ async def get_incident(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get('/incidents/stream')
+async def incidents_stream(request: Request):
+    q = sse_broadcaster.subscribe()
+
+    async def event_generator():
+        try:
+            while True:
+                # disconnect check
+                if await request.is_disconnected():
+                    break
+                data = await q.get()
+                try:
+                    yield f"data: {json.dumps(data)}\n\n"
+                except Exception:
+                    # malformed payload, skip
+                    continue
+        finally:
+            sse_broadcaster.unsubscribe(q)
+
+    return StreamingResponse(event_generator(), media_type='text/event-stream')
+
+
 @router.patch("/incidents/{session_id}")
 async def update_incident(
     session_id: str,
     update_data: IncidentUpdate,
     db: Session = Depends(get_db)
 ):
-    """
-    Update incident (status, notes, etc.).
-    
-    Example:
-        PATCH /api/layer3/incidents/abc123
-        {
-            "status": "ACKNOWLEDGED",
-            "analyst_notes": "Verified as benign"
-        }
-    """
+
     try:
         incident = db.query(Incident).filter(Incident.session_id == session_id).first()
         
@@ -188,7 +187,7 @@ async def update_incident(
         db.commit()
         db.refresh(incident)
         
-        logger.info(f"✏️  Updated incident: {session_id} → {incident.status}")
+        logger.info(f"Updated incident: {session_id} → {incident.status}")
         return IncidentResponse.from_orm(incident)
     
     except HTTPException:
@@ -204,16 +203,7 @@ async def submit_feedback(
     feedback_data: FeedbackCreate,
     db: Session = Depends(get_db)
 ):
-    """
-    Submit analyst feedback (TP/FP/UNKNOWN).
-    
-    Example:
-        POST /api/layer3/incidents/abc123/feedback
-        {
-            "feedback_type": "FP",
-            "analyst_comment": "Legitimate file, false alarm"
-        }
-    """
+
     try:
         incident = db.query(Incident).filter(Incident.session_id == session_id).first()
         
@@ -258,12 +248,6 @@ async def submit_feedback(
 
 @router.get("/stats")
 async def get_incident_stats(db: Session = Depends(get_db)):
-    """
-    Get incident statistics (counts, severity distribution, MTTI).
-    
-    Example:
-        GET /api/layer3/stats
-    """
     try:
         incidents = db.query(Incident).all()
         

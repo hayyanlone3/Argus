@@ -2,7 +2,7 @@
 from sqlalchemy.orm import Session
 from typing import Optional
 from backend.database.models import Edge, Node, Incident
-from backend.database.schemas import IncidentCreate
+from backend.database.schemas import IncidentCreate, IncidentResponse
 from backend.shared.enums import Severity, EdgeType
 from sqlalchemy import func
 from backend.shared.logger import setup_logger
@@ -184,8 +184,17 @@ class CorrelatorService:
             db.commit()
             db.refresh(incident)
             
-            logger.info(f"✨ Created incident: {session_id} ({severity.value}, {len(edges)} edges)")
-            return incident
+                    logger.info(f"✨ Created incident: {session_id} ({severity.value}, {len(edges)} edges)")
+
+                    # Notify SSE subscribers about the new incident (best-effort, async)
+                    try:
+                        from . import broadcaster
+                        payload = IncidentResponse.from_orm(incident).dict()
+                        broadcaster.notify_incident(payload)
+                    except Exception as e:
+                        logger.debug(f"  SSE notify skipped: {e}")
+
+                    return incident
         
         except Exception as e:
             logger.error(f"  Failed to create incident: {e}")
