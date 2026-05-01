@@ -51,19 +51,18 @@ async def lifespan(app: FastAPI):
 
     # STARTUP
     try:
-        logger.info("=" * 80)
-        logger.info("ARGUS Backend Initializing...")
-        logger.info("=" * 80)
-
         init_db()
-
-        # ML models - DISABLED for faster startup
-        # Auto-scoring doesn't need ML models
+        
+        # Register event loop for SSE broadcasting
+        import asyncio
+        from backend.layers.layer3_correlator import broadcaster
+        loop = asyncio.get_event_loop()
+        broadcaster.set_event_loop(loop)
+        logger.info("📡 SSE: Event loop registered for incident broadcasting")
+        
         logger.info("ML models: Disabled (using rule-based auto-scoring for speed)")
         app.state.ml_loader = None
 
-        # Layer 2 Runtime Engine - ENABLED for UI display
-        # This populates the live event stream for Layer 2 dashboard
         app.state.layer2_engine = Layer2RuntimeEngine()
         app.state.layer2_engine.start()
         logger.info("Layer 2: Runtime engine enabled for UI event stream")
@@ -135,7 +134,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://localhost:5174"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -143,7 +142,6 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
-    """Health check endpoint"""
     return {
         "status": "healthy",
         "version": "2.2.0",

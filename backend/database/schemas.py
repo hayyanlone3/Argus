@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 from typing import Optional, List
 from backend.shared.enums import NodeType, EdgeType, Severity, Status
@@ -94,6 +94,13 @@ class IncidentResponse(BaseModel):
     detection_seconds: Optional[float]  # AI detection time
     first_event_timestamp: Optional[datetime]  # First event time
     resolved_at: Optional[datetime]
+
+    @field_validator('session_id', mode='before')
+    @classmethod
+    def normalize_session_id(cls, v):
+        if isinstance(v, str):
+            return v.strip('{}')
+        return v
 
     class Config:
         from_attributes = True

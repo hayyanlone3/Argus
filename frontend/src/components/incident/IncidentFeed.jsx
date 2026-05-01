@@ -4,13 +4,12 @@ import IncidentCard from './IncidentCard';
 import LoadingSpinner from '../common/LoadingSpinner';
 import { incidentService } from '../../services/incidentService';
 
-export default function IncidentFeed({ severity = null, limit = 20, showMalwareToggle = true }) {
+export default function IncidentFeed({ severity = null, limit = 20, showMalwareToggle = false }) {
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  const [statusFilter, setStatusFilter] = useState('NEW'); // Default to unhandled
-  const [malwareOnly, setMalwareOnly] = useState(false);
+  const [viewFilter, setViewFilter] = useState('ACTIVE'); // ACTIVE or ALL
 
   useEffect(() => {
     let mounted = true;
@@ -19,12 +18,35 @@ export default function IncidentFeed({ severity = null, limit = 20, showMalwareT
         if (initial) setLoading(true);
         else setRefreshing(true);
 
-        const filter = statusFilter === 'ALL' ? null : statusFilter;
-        const effectiveSeverity = malwareOnly ? 'CRITICAL' : severity;
-        const data = await incidentService.getIncidents(effectiveSeverity, filter, limit);
+        // ACTIVE = NEW + OPEN with CRITICAL or WARNING severity
+        // ALL = everything
+        let statusFilter = null;
+        let severityFilter = severity;
+        
+        if (viewFilter === 'ACTIVE') {
+          // Don't filter by status (get NEW and OPEN)
+          // But only show CRITICAL and WARNING
+          if (!severity) {
+            severityFilter = null; // Will filter client-side
+          }
+        }
+
+        const data = await incidentService.getIncidents(severityFilter, statusFilter, limit * 2);
         if (!mounted) return;
 
-        setIncidents(data.incidents || []);
+        let filteredIncidents = data.incidents || [];
+        
+        // Client-side filtering for ACTIVE view
+        if (viewFilter === 'ACTIVE') {
+          filteredIncidents = filteredIncidents.filter(inc => 
+            (inc.status === 'NEW' || inc.status === 'OPEN') &&
+            (inc.severity === 'CRITICAL' || inc.severity === 'WARNING')
+          ).slice(0, limit);
+        } else {
+          filteredIncidents = filteredIncidents.slice(0, limit);
+        }
+
+        setIncidents(filteredIncidents);
         setError(null);
       } catch (err) {
         if (!mounted) return;
@@ -39,22 +61,30 @@ export default function IncidentFeed({ severity = null, limit = 20, showMalwareT
     fetchIncidents(true);
 
     // Open SSE stream for real-time incident pushes
-    const es = new EventSource('/api/layer3/incidents/stream');
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://127.0.0.1:8080';
+    const es = new EventSource(`${backendUrl}/api/layer3/incidents/stream`);
     es.onmessage = (ev) => {
       try {
         const data = JSON.parse(ev.data);
         if (!mounted) return;
-        setIncidents(prev => {
-          // prepend and dedupe by session_id
-          const next = [data, ...prev.filter(i => i.session_id !== data.session_id)];
-          return next.slice(0, limit);
-        });
+        
+        // Apply same filtering logic for SSE updates
+        const shouldShow = viewFilter === 'ALL' || 
+          ((data.status === 'NEW' || data.status === 'OPEN') &&
+           (data.severity === 'CRITICAL' || data.severity === 'WARNING'));
+        
+        if (shouldShow) {
+          setIncidents(prev => {
+            // prepend and dedupe by session_id
+            const next = [data, ...prev.filter(i => i.session_id !== data.session_id)];
+            return next.slice(0, limit);
+          });
+        }
       } catch (err) {
         console.error('SSE parse error', err);
       }
     };
     es.onerror = (err) => {
-      // If SSE fails, keep UI working — we silently fallback to periodic refresh via occasional fetch
       console.warn('SSE connection error', err);
     };
 
@@ -62,7 +92,7 @@ export default function IncidentFeed({ severity = null, limit = 20, showMalwareT
       mounted = false;
       try { es.close(); } catch (e) {}
     };
-  }, [severity, limit, statusFilter, malwareOnly]);
+  }, [severity, limit, viewFilter]);
 
   if (loading) return <LoadingSpinner />;
   
@@ -76,42 +106,9 @@ export default function IncidentFeed({ severity = null, limit = 20, showMalwareT
 
   return (
     <div className="space-y-4">
-      {/* Feed Controls */}
-      <div className="flex justify-between items-center bg-[#0f172a] p-1 rounded-lg border border-slate-800">
-        <div className="flex gap-1">
-          {['NEW', 'ACKNOWLEDGED', 'ALL'].map(s => (
-            <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
-              className={`px-4 py-1.5 text-[10px] font-black rounded transition-all ${statusFilter === s ? 'bg-slate-700 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-            >
-              {s}
-            </button>
-          ))}
-          {showMalwareToggle && (
-            <button
-              onClick={() => setMalwareOnly((prev) => !prev)}
-              className={`px-4 py-1.5 text-[10px] font-black rounded transition-all ${malwareOnly ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
-              title="Show CRITICAL malware incidents"
-            >
-              MALWARE
-            </button>
-          )}
-        </div>
-        
-        <div className="text-xs font-mono text-slate-500 flex items-center gap-2 pr-2">
-          {refreshing ? (
-            <span className="flex items-center gap-2">syncing <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" /></span>
-          ) : (
-            <span className="flex items-center gap-2">live <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /></span>
-          )}
-        </div>
-      </div>
-
-      {/* Feed Content */}
       {!incidents.length ? (
         <div className="rounded-xl border border-slate-800 bg-slate-900/50 py-12 text-center text-slate-500 text-xs italic shadow-sm">
-          No {statusFilter.toLowerCase()} incidents found
+          {viewFilter === 'ACTIVE' ? 'No active threats detected' : 'No incidents found'}
         </div>
       ) : (
         <div className="grid gap-4">

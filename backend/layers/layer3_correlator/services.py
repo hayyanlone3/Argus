@@ -183,18 +183,17 @@ class CorrelatorService:
             db.add(incident)
             db.commit()
             db.refresh(incident)
-            
-                    logger.info(f"✨ Created incident: {session_id} ({severity.value}, {len(edges)} edges)")
+            logger.info(f"✨ Created incident: {session_id} ({severity.value}, {len(edges)} edges)")
 
-                    # Notify SSE subscribers about the new incident (best-effort, async)
-                    try:
-                        from . import broadcaster
-                        payload = IncidentResponse.from_orm(incident).dict()
-                        broadcaster.notify_incident(payload)
-                    except Exception as e:
-                        logger.debug(f"  SSE notify skipped: {e}")
+            # Notify SSE subscribers about the new incident (best-effort, async)
+            try:
+                from . import broadcaster
+                payload = IncidentResponse.from_orm(incident).dict()
+                broadcaster.notify_incident(payload)
+            except Exception as e:
+                logger.debug(f"  SSE notify skipped: {e}")
 
-                    return incident
+            return incident
         
         except Exception as e:
             logger.error(f"  Failed to create incident: {e}")
@@ -333,6 +332,14 @@ class CorrelatorService:
                 logger.warning(f"[CORRELATOR]   MITRE: {incident.mitre_stage}")
                 if incident.detection_seconds is not None:
                     logger.warning(f"[CORRELATOR]   ⚡ AI Detection Time: {incident.detection_seconds:.2f}s")
+                
+                # Notify SSE subscribers about the new incident (best-effort, async)
+                try:
+                    from . import broadcaster
+                    payload = IncidentResponse.from_orm(incident).dict()
+                    broadcaster.notify_incident(payload)
+                except Exception as e:
+                    logger.debug(f"📡 SSE notify failed: {e}")
             
             return incident
 

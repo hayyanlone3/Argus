@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from backend.database.connection import get_db
 from backend.database.models import Incident, Edge, Feedback
@@ -100,6 +101,28 @@ async def list_incidents(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get('/incidents/stream')
+async def incidents_stream(request: Request):
+    q = await sse_broadcaster.subscribe()
+
+    async def event_generator():
+        try:
+            while True:
+                # disconnect check
+                if await request.is_disconnected():
+                    break
+                data = await q.get()
+                try:
+                    yield f"data: {json.dumps(data)}\n\n"
+                except Exception:
+                    # malformed payload, skip
+                    continue
+        finally:
+            sse_broadcaster.unsubscribe(q)
+
+    return StreamingResponse(event_generator(), media_type='text/event-stream')
+
+
 @router.get("/incidents/{session_id}")
 async def get_incident(
     session_id: str,
@@ -107,7 +130,11 @@ async def get_incident(
 ):
 
     try:
+        # Try exact match first, then with braces for backward compatibility
         incident = db.query(Incident).filter(Incident.session_id == session_id).first()
+        if not incident:
+            # Try with braces if the session_id was normalized by client
+            incident = db.query(Incident).filter(Incident.session_id == f"{{{session_id}}}").first()
         
         if not incident:
             raise HTTPException(status_code=404, detail="Incident not found")
@@ -139,28 +166,6 @@ async def get_incident(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get('/incidents/stream')
-async def incidents_stream(request: Request):
-    q = sse_broadcaster.subscribe()
-
-    async def event_generator():
-        try:
-            while True:
-                # disconnect check
-                if await request.is_disconnected():
-                    break
-                data = await q.get()
-                try:
-                    yield f"data: {json.dumps(data)}\n\n"
-                except Exception:
-                    # malformed payload, skip
-                    continue
-        finally:
-            sse_broadcaster.unsubscribe(q)
-
-    return StreamingResponse(event_generator(), media_type='text/event-stream')
-
-
 @router.patch("/incidents/{session_id}")
 async def update_incident(
     session_id: str,
@@ -169,7 +174,10 @@ async def update_incident(
 ):
 
     try:
+        # Try exact match first, then with braces for backward compatibility
         incident = db.query(Incident).filter(Incident.session_id == session_id).first()
+        if not incident:
+            incident = db.query(Incident).filter(Incident.session_id == f"{{{session_id}}}").first()
         
         if not incident:
             raise HTTPException(status_code=404, detail="Incident not found")
@@ -205,7 +213,10 @@ async def submit_feedback(
 ):
 
     try:
+        # Try exact match first, then with braces for backward compatibility
         incident = db.query(Incident).filter(Incident.session_id == session_id).first()
+        if not incident:
+            incident = db.query(Incident).filter(Incident.session_id == f"{{{session_id}}}").first()
         
         if not incident:
             raise HTTPException(status_code=404, detail="Incident not found")

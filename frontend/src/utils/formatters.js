@@ -2,8 +2,26 @@
 
 export const formatDate = (dateString) => {
   if (!dateString) return 'N/A';
-  const date = new Date(dateString);
-  return date.toLocaleString();
+  
+  // PostgreSQL returns timestamps without 'Z' suffix even though they're UTC
+  // Add 'Z' to indicate UTC if not present
+  let isoString = dateString;
+  if (!dateString.endsWith('Z') && !dateString.includes('+')) {
+    isoString = dateString + 'Z';
+  }
+  
+  const date = new Date(isoString);
+  
+  // Format in local timezone
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  });
 };
 
 export const formatTime = (dateString) => {

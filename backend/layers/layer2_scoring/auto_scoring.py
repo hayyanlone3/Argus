@@ -148,6 +148,53 @@ class AutoScoringService:
         elif edge.edge_type == EdgeType.SPAWNED:
             # Process spawning - check for suspicious processes
             process_lower = (target.name or "").lower()
+            parent_lower = (source.name or "").lower()
+            
+            # WHITELIST: Trusted parent processes spawning shells is LEGITIMATE
+            trusted_parents = [
+                "kiro.exe", "code.exe", "opencode.exe", "devenv.exe",
+                "pycharm", "idea", "webstorm", "rider", "goland", "clion",
+                "windowsterminal.exe", "wt.exe", "explorer.exe", "conhost.exe"
+            ]
+            
+            is_trusted_parent = any(tp in parent_lower for tp in trusted_parents)
+            is_shell = any(sh in process_lower for sh in ["cmd.exe", "powershell.exe", "pwsh.exe"])
+            
+            # If trusted parent spawning shell, check command line for malicious patterns
+            if is_trusted_parent and is_shell:
+                cmd_line = ""
+                if edge.edge_metadata:
+                    cmd_line = (edge.edge_metadata.get("child_cmd") or "").lower()
+                
+                # Only flag if MALICIOUS command patterns present
+                malicious_patterns = [
+                    "downloadstring", "invoke-webrequest", "iwr ",
+                    "invoke-expression", "iex(", "iex ",
+                    "frombase64string", "-encodedcommand", "-enc ",
+                    "new-object net.webclient", "curl ", "wget "
+                ]
+                
+                has_malicious = any(p in cmd_line for p in malicious_patterns)
+                
+                if not has_malicious:
+                    # Legitimate IDE/terminal spawn - minimal score
+                    score = 0.05
+                    sev = Severity.BENIGN
+                    edge.anomaly_score = float(score)
+                    edge.entropy_value = float(ent) if ent is not None else None
+                    edge.final_severity = sev
+                    
+                    md = edge.edge_metadata or {}
+                    md.update({
+                        "layer2_auto_scored": True,
+                        "path_risk": pr,
+                        "extension_risk": er,
+                        "whitelist_reason": "trusted_parent_legitimate_spawn"
+                    })
+                    edge.edge_metadata = md
+                    db.commit()
+                    db.refresh(edge)
+                    return edge
             
             suspicious_processes = {
                 "cmd.exe": 0.40,  # Increased from 0.35
@@ -192,7 +239,49 @@ class AutoScoringService:
                         score += pattern_score
         
         elif edge.edge_type == EdgeType.WROTE:
-            # File write - original logic
+            # File write - check for legitimate IDE/app writes first
+            parent_lower = (source.name or "").lower()
+            file_path_lower = (file_path or "").lower()
+            
+            # WHITELIST: Trusted applications writing to their own directories
+            trusted_app_writes = [
+                ("kiro.exe", "\\kiro\\"),
+                ("code.exe", "\\code\\"),
+                ("opencode.exe", "\\opencode\\"),
+                ("chrome.exe", "\\chrome\\"),
+                ("firefox.exe", "\\firefox\\"),
+                ("msedge.exe", "\\microsoft\\edge\\"),
+                ("explorer.exe", "\\microsoft\\windows\\"),
+                ("svchost.exe", "\\microsoft\\windows\\"),
+            ]
+            
+            is_legitimate_write = False
+            for app, app_dir in trusted_app_writes:
+                if app in parent_lower and app_dir in file_path_lower:
+                    is_legitimate_write = True
+                    break
+            
+            if is_legitimate_write:
+                # Legitimate app writing to its own directory
+                score = 0.05
+                sev = Severity.BENIGN
+                edge.anomaly_score = float(score)
+                edge.entropy_value = float(ent) if ent is not None else None
+                edge.final_severity = sev
+                
+                md = edge.edge_metadata or {}
+                md.update({
+                    "layer2_auto_scored": True,
+                    "path_risk": pr,
+                    "extension_risk": er,
+                    "whitelist_reason": "trusted_app_legitimate_write"
+                })
+                edge.edge_metadata = md
+                db.commit()
+                db.refresh(edge)
+                return edge
+            
+            # File write - original logic for non-whitelisted writes
             if pr > 0:
                 score += 0.40
             if er > 0:
