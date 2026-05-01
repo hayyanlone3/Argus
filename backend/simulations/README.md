@@ -1,118 +1,219 @@
-# Malware Simulations - Quick Start
+# 🦠 ARGUS Malware Simulations
 
-This folder contains executable malware samples that trigger Layer 2 detection in ARGUS.
+## One-Click Malware Tests
 
-## 🚀 Quick Start (1-Click Execution)
+All malware can be run by **double-clicking** the `.bat` files!
 
-### Option 1: Run Individual Malware Samples
+---
 
-**Windows (Double-click any of these):**
-- `RUN_MALWARE_1.bat` - Process Injection Attack
-- `RUN_MALWARE_2.bat` - Registry Persistence & Encryption
-- `RUN_MALWARE_3.bat` - PowerShell & Lateral Movement
+## 🎮 Interactive Menu (Recommended)
 
-**Linux/Mac:**
-```bash
-python malware_sample_1.py
-python malware_sample_2.py
-python malware_sample_3.py
+**Double-click: `RUN_ALL_MALWARE.bat`**
+
+Choose from a menu:
+```
+1. SIMPLE MALWARE       - Single cmd.exe (easiest test)
+2. TEST DETECTION       - 5 cmd.exe spawns
+3. VERBOSE MALWARE      - Step-by-step with output
+
+4. AGGRESSIVE 1         - 10 cmd.exe spawns
+5. AGGRESSIVE 2         - PowerShell attacks
+6. AGGRESSIVE 3         - File drops + cmd spawns
+7. AGGRESSIVE 4         - LOLBin abuse
+8. AGGRESSIVE 5         - ULTIMATE ATTACK (everything)
 ```
 
-### Option 2: Run All Malware Samples
+---
 
-**Windows (Double-click):**
-- `RUN_ALL_MALWARE.bat` - Runs all 3 samples sequentially
+## 📋 Individual Tests
 
-**Linux/Mac:**
-```bash
-python malware_sample_1.py && python malware_sample_2.py && python malware_sample_3.py
+### ⭐ Beginner Tests (Start Here)
+
+| File | What It Does | Difficulty |
+|------|--------------|------------|
+| **`RUN_SIMPLE_MALWARE.bat`** | Spawns 1 cmd.exe | ⭐ Easiest |
+| **`RUN_TEST_DETECTION.bat`** | Spawns 5 cmd.exe rapidly | ⭐⭐ Easy |
+| **`RUN_VERBOSE_MALWARE.bat`** | 3 cmd.exe with step-by-step output | ⭐⭐ Easy |
+
+### 🔥 Advanced Tests
+
+| File | What It Does | Difficulty |
+|------|--------------|------------|
+| **`RUN_AGGRESSIVE_1.bat`** | 10 cmd.exe in 2 seconds | ⭐⭐⭐ Medium |
+| **`RUN_AGGRESSIVE_2.bat`** | 5 PowerShell with suspicious flags | ⭐⭐⭐ Medium |
+| **`RUN_AGGRESSIVE_3.bat`** | 5 .exe drops + 7 cmd.exe | ⭐⭐⭐⭐ Hard |
+| **`RUN_AGGRESSIVE_4.bat`** | wscript, cscript, rundll32 | ⭐⭐⭐⭐ Hard |
+| **`RUN_AGGRESSIVE_5.bat`** | ULTIMATE: 29 malicious actions | ⭐⭐⭐⭐⭐ Extreme |
+
+---
+
+## 🚀 How to Use
+
+### Step 1: Start Backend
+From root directory, run:
+```
+START_BACKEND_SAFE.bat
 ```
 
-## 📋 Available Malware Samples
+Wait for:
+```
+🎯 READY - Waiting for new malware activity...
+```
 
-### Malware Sample 1: Process Injection
-- **File**: `malware_sample_1.py` or `RUN_MALWARE_1.bat`
-- **Attack**: Spawns 5 cmd.exe processes with suspicious commands
-- **Triggers**: Spawn rate anomaly, unusual process hierarchy
-- **Expected Alerts**: 5-10 CRITICAL alerts
+### Step 2: Run Malware
+Go to `backend/simulations/` folder and **double-click** any `.bat` file!
 
-### Malware Sample 2: Registry Persistence & Encryption
-- **File**: `malware_sample_2.py` or `RUN_MALWARE_2.bat`
-- **Attack**: Modifies registry keys + encrypts files
-- **Triggers**: Registry modification patterns, file rename burst
-- **Expected Alerts**: 10-15 CRITICAL alerts
+### Step 3: Check Detection
+Look at backend console for:
+```
+[SYSMON] ⚠️  SUSPICIOUS PROCESS: cmd.exe
+[AUTO-SCORE] 🚨 CRITICAL DETECTED!
+[CORRELATOR] 🚨 CRITICAL INCIDENT CREATED!
+```
 
-### Malware Sample 3: PowerShell & Lateral Movement
-- **File**: `malware_sample_3.py` or `RUN_MALWARE_3.bat`
-- **Attack**: PowerShell commands + network reconnaissance
-- **Triggers**: Suspicious command line, network connections
-- **Expected Alerts**: 8-12 CRITICAL alerts
+---
+
+## 📊 Test Details
+
+### SIMPLE_MALWARE
+- **Actions**: 1 cmd.exe spawn
+- **Expected Score**: 0.50 (CRITICAL)
+- **Detection Time**: < 1 second
+- **Use Case**: Verify basic detection works
+
+### TEST_DETECTION
+- **Actions**: 5 cmd.exe spawns (0.2s apart)
+- **Expected Score**: 0.50 each (CRITICAL)
+- **Detection Time**: < 2 seconds
+- **Use Case**: Test rapid process spawning
+
+### VERBOSE_MALWARE
+- **Actions**: 3 cmd.exe spawns (1s apart)
+- **Expected Score**: 0.50 each (CRITICAL)
+- **Detection Time**: < 3 seconds
+- **Use Case**: See step-by-step what's happening
+
+### AGGRESSIVE_MALWARE_1
+- **Actions**: 10 cmd.exe spawns in 2 seconds
+- **Expected Score**: 0.50 each (CRITICAL)
+- **Detection Time**: < 3 seconds
+- **Use Case**: Stress test rapid spawning
+
+### AGGRESSIVE_MALWARE_2
+- **Actions**: 5 PowerShell commands with:
+  - `-NoProfile`
+  - `-EncodedCommand`
+  - `-WindowStyle Hidden`
+  - `-ExecutionPolicy Bypass`
+- **Expected Score**: 0.60-0.80 (CRITICAL)
+- **Detection Time**: < 3 seconds
+- **Use Case**: Test PowerShell detection
+
+### AGGRESSIVE_MALWARE_3
+- **Actions**: 
+  - 5 .exe files dropped in temp
+  - 7 cmd.exe spawns
+- **Expected Score**: 0.40-0.75 (CRITICAL)
+- **Detection Time**: < 4 seconds
+- **Use Case**: Test file creation + process spawning
+
+### AGGRESSIVE_MALWARE_4
+- **Actions**: LOLBin abuse:
+  - wscript.exe
+  - cscript.exe
+  - rundll32.exe
+- **Expected Score**: 0.55+ (CRITICAL)
+- **Detection Time**: < 2 seconds
+- **Use Case**: Test Living-off-the-Land binaries
+
+### AGGRESSIVE_MALWARE_5 (ULTIMATE)
+- **Actions**: Everything at once:
+  - 15 cmd.exe spawns
+  - 3 PowerShell attacks
+  - 8 .exe file drops
+  - 3 LOLBin attacks
+- **Total**: 29 malicious actions
+- **Expected Score**: 0.40-0.80 (CRITICAL)
+- **Detection Time**: < 6 seconds
+- **Use Case**: Ultimate stress test
+
+---
 
 ## ✅ Expected Results
 
-When you run any malware sample:
+For **all tests**, you should see in backend console:
 
-1. **Console Output**: Shows malware execution progress
-2. **Dashboard Alerts**: Layer 2 detects CRITICAL severity alerts
-3. **Fusion Scores**: 0.8-1.0 confidence
-4. **Detection Latency**: <1 second
-
-## 🔧 How to Use
-
-### Step 1: Start ARGUS Backend
-```bash
-cd backend
-python main.py
 ```
-Wait for: `API running on 0.0.0.0:8000`
+[SYSMON] ⚠️  SUSPICIOUS PROCESS: cmd.exe (PID: 1234)
+[SYSMON]   Parent: python.exe
+[SYSMON]   Command: cmd.exe /c echo ...
+[COLLECTOR] ✅ Suspicious event published
 
-### Step 2: Run Malware Sample
-**Windows**: Double-click `RUN_MALWARE_1.bat` (or any sample)
-**Linux/Mac**: `python malware_sample_1.py`
+[INGESTION] ✅ Batch processed: X suspicious events
+[INGESTION]   - cmd.exe (PID: 1234)
+[INGESTION]   - cmd.exe (PID: 5678)
 
-### Step 3: Monitor Dashboard
-Open http://localhost:3000 and check Layer 2 for alerts
+[AUTO-SCORE] 🚨 CRITICAL DETECTED!
+[AUTO-SCORE]   Edge ID: 42
+[AUTO-SCORE]   Type: SPAWNED
+[AUTO-SCORE]   Score: 0.50
+[AUTO-SCORE]   Target: cmd.exe
 
-## 📊 Performance
-
-| Sample | Events | Execution Time | Expected Alerts |
-|--------|--------|-----------------|-----------------|
-| Sample 1 | ~15 | 2-3 seconds | 5-10 |
-| Sample 2 | ~20 | 3-4 seconds | 10-15 |
-| Sample 3 | ~18 | 3-4 seconds | 8-12 |
-| All 3 | ~53 | 8-11 seconds | 23-37 |
-
-## 🐛 Troubleshooting
-
-**No detections?**
-```bash
-# Verify backend is running
-curl http://localhost:8000/health
-
-# Check Layer 2
-curl http://localhost:8000/api/layer2/health
-
-# Check latest events
-curl http://localhost:8000/api/layer2/live/latest
+[CORRELATOR] 🚨 CRITICAL INCIDENT CREATED!
+[CORRELATOR]   ID: 1
+[CORRELATOR]   Session: {guid}
+[CORRELATOR]   Edges: 5
+[CORRELATOR]   MITRE: Execution
 ```
 
-**Low scores?**
-- Wait 10-15 seconds for correlation
-- Check ML models in backend logs
-- Run multiple samples for more detections
+---
 
-## 📝 Notes
+## 🔧 Troubleshooting
 
-- These are **simulations only** - no actual malware is executed
-- Sysmon must be running to collect events
-- Backend must be running before executing samples
-- Safe to run multiple times
-- Use for testing and demonstration only
+### No Detection?
+1. Check Sysmon is running: `CHECK_SYSMON.bat` (in root)
+2. Check backend logs for errors
+3. Verify backend shows "READY - Waiting for new malware activity..."
 
-## 🎯 Next Steps
+### Slow Detection?
+1. Edit `backend/.env`: Set `ARGUS_SYSMON_POLL_SEC=0.05`
+2. Restart backend
 
-1. Double-click `RUN_ALL_MALWARE.bat` to run all samples
-2. Open dashboard at http://localhost:3000
-3. Review Layer 2 alerts and scores
-4. Check correlation in Layer 3
-5. Verify response recommendations in Layer 4
+### False Negatives?
+1. Lower thresholds in `backend/layers/layer2_scoring/auto_scoring.py`
+2. Change `if score >= 0.35:` to `if score >= 0.25:`
+
+---
+
+## 🎯 Recommended Testing Order
+
+1. **`RUN_SIMPLE_MALWARE.bat`** - Verify basic detection
+2. **`RUN_VERBOSE_MALWARE.bat`** - Understand the flow
+3. **`RUN_TEST_DETECTION.bat`** - Test rapid detection
+4. **`RUN_AGGRESSIVE_5.bat`** - Ultimate stress test
+
+---
+
+## 💡 Tips
+
+- Always start backend before running malware
+- Watch backend console in real-time
+- Use VERBOSE_MALWARE to see step-by-step execution
+- Start with SIMPLE_MALWARE for first test
+- Use AGGRESSIVE_5 to verify system handles complex attacks
+
+---
+
+## ⚠️ Safety Note
+
+These are **simulated malware** for testing purposes only. They:
+- Spawn legitimate Windows processes (cmd.exe, powershell.exe)
+- Create temporary files that are immediately deleted
+- Do NOT contain actual malicious code
+- Are safe to run on your system
+
+However, they **will trigger** antivirus software and ARGUS detection!
+
+---
+
+**Happy Testing! 🎯**

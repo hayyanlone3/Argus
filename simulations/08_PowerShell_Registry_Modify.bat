@@ -4,8 +4,14 @@ REM Triggers: registry modification, PowerShell execution, persistence patterns
 REM Compatible with 64-bit Windows 10
 
 REM Force 64-bit PowerShell even if running from 32-bit cmd
-set "PS_CMD=%windir%\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
-if not exist "%PS_CMD%" set "PS_CMD=powershell.exe"
+set "PS_CMD=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
+if exist "%SystemRoot%\Sysnative\WindowsPowerShell\v1.0\powershell.exe" set "PS_CMD=%SystemRoot%\Sysnative\WindowsPowerShell\v1.0\powershell.exe"
+if not exist "%PS_CMD%" (
+	echo ERROR: PowerShell not found.
+	pause
+	exit /b 1
+)
+
 
 echo ============================================
 echo PowerShell Registry Persistence Attack

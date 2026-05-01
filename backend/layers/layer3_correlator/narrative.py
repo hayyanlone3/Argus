@@ -40,7 +40,7 @@ class NarrativeGenerator:
             else:
                 narrative = NarrativeGenerator._generate_benign(edges)
             
-            logger.debug(f"📝 Generated narrative ({severity.value}): {narrative[:100]}...")
+            logger.debug(f"  Generated narrative ({severity.value}): {narrative[:100]}...")
             return narrative
         
         except Exception as e:
@@ -55,11 +55,6 @@ class NarrativeGenerator:
             injection_edges = [e for e in edges if e.edge_type == EdgeType.INJECTED_INTO]
             if injection_edges:
                 return f"  CRITICAL: Code injection detected. {len(injection_edges)} injection event(s) observed in process chain. Immediate isolation recommended."
-            
-            # Check for AMSI disable
-            amsi_edges = [e for e in edges if e.edge_type == EdgeType.DISABLED_AMSI]
-            if amsi_edges:
-                return f"  CRITICAL: AMSI monitoring disabled. Indicates evasion of Microsoft security controls. {len(amsi_edges)} AMSI tampering event(s)."
             
             # Generic critical
             return f"  CRITICAL: Multiple anomalous behaviors detected across {len(edges)} events in process chain. High confidence of compromise."

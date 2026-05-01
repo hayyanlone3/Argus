@@ -91,7 +91,16 @@ export default function IncidentDetail() {
               </span>
               <h1 className="text-lg font-black tracking-tight text-white uppercase">CASE ID: {sessionId.substring(0, 16)}</h1>
             </div>
-            <p className="text-[10px] text-slate-500 font-mono mt-1">MTTI: {inc.mtti_seconds || '0'}s | CREATED: {formatDate(inc.created_at)}</p>
+            <div className="text-[10px] text-slate-500 font-mono mt-1 space-y-0.5">
+              {inc.detection_seconds !== undefined && inc.detection_seconds !== null && (
+                <p className="text-green-400 font-semibold">
+                  AI DETECTED: {inc.detection_seconds.toFixed(2)}s
+                </p>
+              )}
+              <p>
+                MTTI: {inc.mtti_seconds || '0'}s | CREATED: {formatDate(inc.created_at)}
+              </p>
+            </div>
           </div>
         </div>
         <div className="flex gap-3">

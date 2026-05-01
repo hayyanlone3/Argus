@@ -33,25 +33,61 @@ class GraphIngestionWorker:
             self._thread.join(timeout=5)
 
     def _run(self):
+        logger.info("[INGESTION] Graph ingestion worker started")
+        processed_count = 0
+        
+        # Batch processing for better performance
+        batch = []
+        batch_size = 10
+        last_flush = time.time()
+        
         while not self._stop.is_set():
             try:
-                evt = GRAPH_QUEUE.get(timeout=1.0)
-                # Only log suspicious events to reduce noise
-                if evt.kind == "PROCESS_CREATE" and any(x in (evt.child_process or "").lower() for x in ["cmd.exe", "powershell", "wscript", "cscript"]):
-                    logger.debug(f"[INGESTION] Writing suspicious: {evt.kind} - {evt.child_process}")
+                evt = GRAPH_QUEUE.get(timeout=0.05)
+                batch.append(evt)
+                processed_count += 1
+                
+                # Flush batch if full or 1 second elapsed
+                current_time = time.time()
+                should_flush = len(batch) >= batch_size or (current_time - last_flush) > 1.0
+                
+                if should_flush and batch:
+                    # Process entire batch at once
+                    db = connection.SessionLocal()
+                    try:
+                        for evt in batch:
+                            try:
+                                self._process_event(db, evt)
+                            except Exception as e:
+                                logger.error(f"[INGESTION] Error processing event: {e}")
+                        
+                        db.commit()  # Single commit for entire batch
+                        batch.clear()
+                        last_flush = current_time
+                    except Exception as e:
+                        logger.error(f"[INGESTION] Batch processing failed: {e}")
+                        db.rollback()
+                        batch.clear()
+                    finally:
+                        db.close()
+                        
             except:
+                # Flush remaining batch on timeout
+                if batch:
+                    db = connection.SessionLocal()
+                    try:
+                        for evt in batch:
+                            try:
+                                self._process_event(db, evt)
+                            except:
+                                pass
+                        db.commit()
+                        batch.clear()
+                    except:
+                        db.rollback()
+                    finally:
+                        db.close()
                 continue
-
-            try:
-                db = connection.SessionLocal()
-                try:
-                    self._process_event(db, evt)
-                finally:
-                    db.close()
-            except Exception:
-                logger.exception("Graph Ingestion failed")
-                # Prevent rapid error loops
-                time.sleep(0.1)
 
     def _process_event(self, db, evt: TelemetryEvent):
         # 1. Ensure nodes exist
@@ -110,7 +146,7 @@ class GraphIngestionWorker:
             ))
             # Target key
             target_node = GraphService.create_or_update_node(db, NodeCreate(
-                type=NodeType.REGISTRY,
+                type=NodeType.REG_KEY,
                 name=evt.reg_target or "registry_key",
                 path=evt.reg_target
             ))

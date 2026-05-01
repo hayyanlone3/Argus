@@ -54,7 +54,7 @@ class FeedbackService:
             db.commit()
             db.refresh(feedback)
             
-            logger.info(f"📝 Feedback submitted: incident {incident_id} = {feedback_data.feedback_type}")
+            logger.info(f"  Feedback submitted: incident {incident_id} = {feedback_data.feedback_type}")
             return feedback
         
         except Exception as e:

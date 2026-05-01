@@ -4,7 +4,7 @@ Layer 2: Scoring API Endpoints
 Provides scoring and decision endpoints
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from backend.database.connection import get_db
 from backend.database.models import Edge, Node
@@ -13,6 +13,8 @@ from .scoring import ScoringEngine
 from .voting_logic import VotingEngine
 
 from backend.layers.layer2_scoring.runtime_engine import LATEST_DECISIONS, LATEST_LOCK
+from backend.layers.layer2_scoring import event_stream
+from backend.layers.layer2_scoring.event_stream import TelemetryEvent, publish_event
 
 logger = setup_logger(__name__)
 
@@ -337,3 +339,104 @@ async def get_live_event(event_id: str):
     except Exception as e:
         logger.error(f"  Failed to get live event: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ingest")
+async def ingest_telemetry_event(event: dict):
+    """
+    Ingest a telemetry event from external sources (e.g., malware simulators).
+    This allows processes outside the backend to send events to Layer 2.
+
+    Expected fields:
+    - event_id: str (optional, auto-generated if missing)
+    - ts: float (optional, current time if missing)
+    - source: str (e.g., "sysmon")
+    - kind: str (e.g., "PROCESS_CREATE", "FILE_CREATE", "REG_SET")
+    - session_id: str (optional)
+    - parent_process: str (optional)
+    - child_process: str (optional)
+    - parent_cmd: str (optional)
+    - child_cmd: str (optional)
+    - parent_guid: str (optional)
+    - child_guid: str (optional)
+    - parent_pid: str (optional)
+    - child_pid: str (optional)
+    - target_path: str (optional)
+    - reg_target: str (optional)
+    - reg_details: str (optional)
+    - file_entropy: float (optional)
+    """
+    try:
+        from backend.layers.layer2_scoring.event_stream import new_event_id
+        import time
+
+        # Auto-fill defaults
+        if "event_id" not in event:
+            event["event_id"] = new_event_id()
+        if "ts" not in event:
+            event["ts"] = time.time()
+        if "source" not in event:
+            event["source"] = "sysmon"
+
+        # Create TelemetryEvent and publish to queues
+        evt = TelemetryEvent(**event)
+        publish_event(evt)
+
+        logger.info(f"[INGEST] Received event: {event.get('kind')} from {event.get('child_process')}")
+        return {"status": "queued", "event_id": evt.event_id}
+    except Exception as e:
+        logger.error(f"  Failed to ingest event: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/debug/stream")
+async def debug_stream():
+    """Debug stream stats for Layer 2 ingestion (queue sizes + last event)."""
+    return {
+        "queues": {
+            "event": event_stream.EVENT_QUEUE.qsize(),
+            "scoring": event_stream.SCORING_QUEUE.qsize(),
+            "graph": event_stream.GRAPH_QUEUE.qsize(),
+        },
+        "last_published_ts": event_stream.LAST_PUBLISHED_TS,
+        "last_event": event_stream.LAST_EVENT,
+        "latest_decisions": len(LATEST_DECISIONS),
+    }
+
+
+@router.get("/debug/collector")
+async def debug_collector(request: Request):
+    """Debug Sysmon collector health (query status + counters)."""
+    sysmon = getattr(request.app.state, "sysmon", None)
+    if not sysmon:
+        return {"enabled": False, "error": "sysmon_not_initialized"}
+    try:
+        return sysmon.get_status()
+    except Exception as e:
+        return {"enabled": False, "error": str(e)}
+
+
+@router.get("/debug/collector/recent")
+async def debug_collector_recent(request: Request, limit: int = Query(5, ge=1, le=20)):
+    """Return recent Sysmon event IDs/record IDs to confirm access."""
+    sysmon = getattr(request.app.state, "sysmon", None)
+    if not sysmon:
+        return {"enabled": False, "error": "sysmon_not_initialized"}
+    try:
+        return sysmon.get_recent_events(limit=limit)
+    except Exception as e:
+        return {"enabled": False, "error": str(e)}
+
+
+@router.get("/debug/engine")
+async def debug_engine(request: Request):
+    """Debug Layer 2 engine status and latest decision count."""
+    engine = getattr(request.app.state, "layer2_engine", None)
+    thread_alive = False
+    if engine and getattr(engine, "_thread", None):
+        thread_alive = bool(engine._thread.is_alive())
+    return {
+        "engine_initialized": engine is not None,
+        "thread_alive": thread_alive,
+        "latest_decisions": len(LATEST_DECISIONS),
+    }

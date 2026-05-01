@@ -23,21 +23,7 @@ class WhitelistService:
         db: Session,
         whitelist_data: WhitelistCreate
     ) -> Whitelist:
-        """
-        Add path to whitelist (Tier 1/2/3).
-        
-        Tiers:
-        - Tier 1: Path only (no hash), Microsoft-signed binaries, lowest false positive rate
-        - Tier 2: Path + Hash binding, trusted applications with version control
-        - Tier 3: Hash only, specific file versions, highest specificity
-        
-        Args:
-            db: Database session
-            whitelist_data: Whitelist creation data
-            
-        Returns:
-            Whitelist record
-        """
+    
         try:
             # Validate Tier 1 constraints
             if whitelist_data.tier == 1:

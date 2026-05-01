@@ -177,7 +177,7 @@ class CorrelatorService:
                 severity=severity,
                 mitre_stage=mitre_stage,
                 narrative=narrative,
-                status="NEW"
+                status="OPEN"
             )
             
             db.add(incident)
@@ -208,7 +208,6 @@ class CorrelatorService:
                 "EXECUTED_SCRIPT": "Execution",
                 "SUBSCRIBED_WMI": "Persistence",
                 "MODIFIED_REG": "Persistence",
-                "DISABLED_AMSI": "Defense Evasion",
                 "READ": "Discovery",
                 "WROTE": "Discovery",
             }
@@ -289,6 +288,10 @@ class CorrelatorService:
             confidence = min(len(edges) / 10.0, 1.0)
 
             if incident is None:
+                # Calculate AI detection time from first event
+                first_event_time = edges[0].timestamp if edges else datetime.utcnow()
+                detection_time = (datetime.utcnow() - first_event_time).total_seconds()
+                
                 incident = Incident(
                     session_id=session_id,
                     created_at=datetime.utcnow(),
@@ -296,7 +299,9 @@ class CorrelatorService:
                     severity=max_sev,
                     mitre_stage=mitre_stage,
                     narrative=narrative,
-                    status="NEW",
+                    status="OPEN",
+                    first_event_timestamp=first_event_time,
+                    detection_seconds=detection_time,
                 )
                 db.add(incident)
             else:
@@ -309,6 +314,17 @@ class CorrelatorService:
 
             db.commit()
             db.refresh(incident)
+            
+            # Log incident creation immediately
+            if incident.severity in (Severity.CRITICAL, Severity.WARNING):
+                logger.warning(f"[CORRELATOR] 🚨 {incident.severity.value} INCIDENT CREATED!")
+                logger.warning(f"[CORRELATOR]   ID: {incident.id}")
+                logger.warning(f"[CORRELATOR]   Session: {incident.session_id}")
+                logger.warning(f"[CORRELATOR]   Edges: {len(edges)}")
+                logger.warning(f"[CORRELATOR]   MITRE: {incident.mitre_stage}")
+                if incident.detection_seconds is not None:
+                    logger.warning(f"[CORRELATOR]   ⚡ AI Detection Time: {incident.detection_seconds:.2f}s")
+            
             return incident
 
         except Exception as e:

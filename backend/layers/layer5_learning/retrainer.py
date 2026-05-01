@@ -104,7 +104,6 @@ class RetrainingService:
             
             # Check for critical edge types
             has_injection = any(e.edge_type.value == "INJECTED_INTO" for e in edges)
-            has_amsi_disable = any(e.edge_type.value == "DISABLED_AMSI" for e in edges)
             has_script_execution = any(e.edge_type.value == "EXECUTED_SCRIPT" for e in edges)
             
             # Calculate max spawn depth

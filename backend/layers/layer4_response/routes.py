@@ -83,6 +83,23 @@ async def list_quarantine(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.get("/quarantine/{quarantine_id}")
+async def get_quarantine_record(
+    quarantine_id: int,
+    db: Session = Depends(get_db)
+):
+    try:
+        record = db.query(Quarantine).filter(Quarantine.id == quarantine_id).first()
+        if not record:
+            raise HTTPException(status_code=404, detail="Quarantine record not found")
+        return QuarantineResponse.from_orm(record)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"  Failed to fetch quarantine record: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.post("/quarantine/{quarantine_id}/restore")
 async def restore_file(
     quarantine_id: int,

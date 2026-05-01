@@ -22,8 +22,6 @@ class EdgeType(str, Enum):
     EXECUTED_SCRIPT = "EXECUTED_SCRIPT"
     SUBSCRIBED_WMI = "SUBSCRIBED_WMI"
     MODIFIED_REG = "MODIFIED_REG"
-    DISABLED_AMSI = "DISABLED_AMSI"
-
 
 class Severity(str, Enum):
     """Incident severity levels."""

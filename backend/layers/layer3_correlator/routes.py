@@ -241,7 +241,7 @@ async def submit_feedback(
         db.commit()
         db.refresh(feedback)
         
-        logger.info(f"📝 Feedback submitted: {session_id} = {feedback_data.feedback_type}")
+        logger.info(f"  Feedback submitted: {session_id} = {feedback_data.feedback_type}")
         
         return {
             "feedback_id": feedback.id,
@@ -278,7 +278,7 @@ async def get_incident_stats(db: Session = Depends(get_db)):
         
         # Count by status
         status_counts = {
-            "OPEN": len([i for i in incidents if i.status in ("OPEN", "NEW")]),
+            "OPEN": len([i for i in incidents if i.status == "OPEN"]),
             "ACKNOWLEDGED": len([i for i in incidents if i.status == "ACKNOWLEDGED"]),
             "FP": len([i for i in incidents if i.status == "FP"]),
             "TP": len([i for i in incidents if i.status == "TP"]),
@@ -288,6 +288,10 @@ async def get_incident_stats(db: Session = Depends(get_db)):
         # Calculate MTTI (only for resolved)
         resolved_mtti = [i.mtti_seconds for i in incidents if i.mtti_seconds]
         avg_mtti = sum(resolved_mtti) / len(resolved_mtti) if resolved_mtti else 0
+        
+        # Calculate AI detection time average
+        detection_times = [i.detection_seconds for i in incidents if i.detection_seconds]
+        avg_detection = sum(detection_times) / len(detection_times) if detection_times else 0
         
         # FP rate
         total_feedback = len([i for i in incidents if i.status in ["FP", "TP"]])
@@ -300,6 +304,7 @@ async def get_incident_stats(db: Session = Depends(get_db)):
             "status_distribution": status_counts,
             "metrics": {
                 "mean_time_to_identify_seconds": int(avg_mtti),
+                "mean_detection_seconds": round(avg_detection, 2),
                 "false_positive_rate_percent": round(fp_rate, 1),
                 "analyst_feedback_count": total_feedback
             }

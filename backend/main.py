@@ -1,6 +1,12 @@
 # backend/main.py
 import sys
 import os
+
+# Load environment variables from .env file
+from dotenv import load_dotenv
+env_path = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(env_path)
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -51,44 +57,39 @@ async def lifespan(app: FastAPI):
 
         init_db()
 
-        # Load ML models
-        logger.info("Loading ML models...")
-        ml_loader = get_ml_loader()
-        if ml_loader.is_loaded:
-            logger.info("ML models loaded successfully")
-            logger.debug(f"Available models: {list(ml_loader.models.keys())}")
-            app.state.ml_loader = ml_loader
-        else:
-            logger.info("ML models not available (using fallback scoring)")
-            logger.debug("To enable ML: Train models on Colab and copy .pkl files to backend/ml/models/")
-            app.state.ml_loader = None
+        # ML models - DISABLED for faster startup
+        # Auto-scoring doesn't need ML models
+        logger.info("ML models: Disabled (using rule-based auto-scoring for speed)")
+        app.state.ml_loader = None
 
+        # Layer 2 Runtime Engine - ENABLED for UI display
+        # This populates the live event stream for Layer 2 dashboard
         app.state.layer2_engine = Layer2RuntimeEngine()
         app.state.layer2_engine.start()
+        logger.info("Layer 2: Runtime engine enabled for UI event stream")
 
         app.state.graph_worker = GraphIngestionWorker()
         app.state.graph_worker.start()
 
         sm_enabled = os.getenv("ARGUS_SYSMON_ENABLED", "true").lower() == "true"
+        poll_sec = float(os.getenv("ARGUS_SYSMON_POLL_SEC", "0.1"))  # Default to 0.1s for real-time
         app.state.sysmon = SysmonCollector(
             enabled=sm_enabled,
-            poll_seconds=float(os.getenv("ARGUS_SYSMON_POLL_SEC", "1.0")),
+            poll_seconds=poll_sec,
             audit_enabled=os.getenv("ARGUS_AUDIT_ENABLED", "true").lower() == "true",
         )
         if sm_enabled:
+            logger.info(f"Starting Sysmon collector (poll={poll_sec}s)")
             app.state.sysmon.start()
         else:
             logger.info("SysmonCollector disabled by ARGUS_SYSMON_ENABLED=false")
 
-        try:
-            from backend.layers.layer5_learning.scheduler import LearningScheduler
-            LearningScheduler.init_scheduler()
-        except Exception as sched_err:
-            logger.warning(f"Learning scheduler init failed (non-fatal): {sched_err}")
+        # Learning scheduler - DISABLED for faster startup
+        # Not needed for real-time detection
+        logger.info("Learning scheduler: Disabled (not needed for real-time detection)")
 
-        logger.info("Database initialized successfully")
-        logger.info("API running on 0.0.0.0:8000")
-        logger.info("Debug mode: True")
+        logger.info("=" * 80)
+        logger.info("✅ ARGUS READY FOR REAL-TIME DETECTION")
         logger.info("=" * 80)
 
     except Exception as e:
@@ -98,12 +99,14 @@ async def lifespan(app: FastAPI):
     yield
 
     # SHUTDOWN
+    # Stop Layer 2 engine
     try:
         e = getattr(app.state, "layer2_engine", None)
         if e:
             e.stop()
     except Exception as ex:
         logger.error(f"Failed to stop layer2 engine cleanly: {ex}")
+    
     try:
         gw = getattr(app.state, "graph_worker", None)
         if gw:

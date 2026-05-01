@@ -19,15 +19,26 @@ def init_db():
         logger.info(f"   Database Type: {settings.database_type}")
         logger.info(f"   Database URL: {settings.database_url[:50]}...")
         
-        # Create engine with robust connection pooling for high-throughput collectors
-        engine = create_engine(
-            settings.database_url,
-            echo=settings.sqlalchemy_echo,
-            pool_size=20,          # Keep 20 connections open
-            max_overflow=50,       # Allow up to 50 bursts
-            pool_timeout=30,
-            pool_recycle=1800,     # Recycle connections every 30m
-        )
+        # Create engine with appropriate pooling based on backend type
+        db_url = settings.database_url
+        is_sqlite = settings.database_type == "sqlite" or db_url.startswith("sqlite")
+
+        if is_sqlite:
+            engine = create_engine(
+                db_url,
+                echo=settings.sqlalchemy_echo,
+                poolclass=NullPool,
+                connect_args={"check_same_thread": False},
+            )
+        else:
+            engine = create_engine(
+                db_url,
+                echo=settings.sqlalchemy_echo,
+                pool_size=20,
+                max_overflow=50,
+                pool_timeout=30,
+                pool_recycle=1800,
+            )
         
         # Test connection
         with engine.connect() as conn:

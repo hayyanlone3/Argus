@@ -4,12 +4,13 @@ import IncidentCard from './IncidentCard';
 import LoadingSpinner from '../common/LoadingSpinner';
 import { incidentService } from '../../services/incidentService';
 
-export default function IncidentFeed({ severity = null, limit = 20 }) {
+export default function IncidentFeed({ severity = null, limit = 20, showMalwareToggle = true }) {
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState('NEW'); // Default to unhandled
+  const [malwareOnly, setMalwareOnly] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -20,7 +21,8 @@ export default function IncidentFeed({ severity = null, limit = 20 }) {
         else setRefreshing(true);
 
         const filter = statusFilter === 'ALL' ? null : statusFilter;
-        const data = await incidentService.getIncidents(severity, filter, limit);
+        const effectiveSeverity = malwareOnly ? 'CRITICAL' : severity;
+        const data = await incidentService.getIncidents(effectiveSeverity, filter, limit);
         if (!mounted) return;
 
         setIncidents(data.incidents || []);
@@ -41,7 +43,7 @@ export default function IncidentFeed({ severity = null, limit = 20 }) {
       mounted = false;
       clearInterval(interval);
     };
-  }, [severity, limit, statusFilter]);
+  }, [severity, limit, statusFilter, malwareOnly]);
 
   if (loading) return <LoadingSpinner />;
   
@@ -67,6 +69,15 @@ export default function IncidentFeed({ severity = null, limit = 20 }) {
               {s}
             </button>
           ))}
+          {showMalwareToggle && (
+            <button
+              onClick={() => setMalwareOnly((prev) => !prev)}
+              className={`px-4 py-1.5 text-[10px] font-black rounded transition-all ${malwareOnly ? 'bg-red-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}
+              title="Show CRITICAL malware incidents"
+            >
+              MALWARE
+            </button>
+          )}
         </div>
         
         <div className="text-xs font-mono text-slate-500 flex items-center gap-2 pr-2">
@@ -95,4 +106,4 @@ export default function IncidentFeed({ severity = null, limit = 20 }) {
       )}
     </div>
   );
-}
+}

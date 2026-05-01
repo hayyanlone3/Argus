@@ -9,6 +9,9 @@ from backend.shared.logger import setup_logger
 
 logger = setup_logger(__name__)
 
+LAST_PUBLISHED_TS: float = 0.0
+LAST_EVENT: Optional[Dict[str, Any]] = None
+
 # shared queue for telemetry events (sysmon → layer2 workers)
 # shared queues for telemetry events
 EVENT_QUEUE: "Queue[TelemetryEvent]" = Queue(maxsize=5000)      # Original (legacy/mixed)
@@ -42,10 +45,13 @@ def new_event_id(prefix: str = "evt") -> str:
     return f"{prefix}-{uuid.uuid4().hex[:16]}"
 
 def publish_event(evt: TelemetryEvent) -> None:
+    global LAST_PUBLISHED_TS, LAST_EVENT
     try:
         EVENT_QUEUE.put_nowait(evt)
         SCORING_QUEUE.put_nowait(evt)
         GRAPH_QUEUE.put_nowait(evt)
+        LAST_PUBLISHED_TS = time.time()
+        LAST_EVENT = to_dict(evt)
     except Exception as e:
         logger.debug(f"[EVENT_STREAM] Failed to publish {evt.kind}: {e}")
 

@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from backend.database.models import Edge, Node
 from backend.shared.enums import EdgeType, NodeType, Severity
 from backend.shared.logger import setup_logger
-from backend.shared.audit import AuditLogger
 
 logger = setup_logger(__name__)
 
@@ -82,22 +81,22 @@ def _extension_risk(path: Optional[str]) -> float:
 
 
 def _severity_from_score(score: float) -> Severity:
-    # Simple mapping for demo/plan milestone
-    if score >= 0.75:
+    # Aggressive thresholds for malware detection
+    if score >= 0.35:
         return Severity.CRITICAL
-    if score >= 0.50:
+    if score >= 0.20:
         return Severity.WARNING
-    if score >= 0.25:
+    if score >= 0.10:
         return Severity.UNKNOWN
     return Severity.BENIGN
 
 
 class AutoScoringService:
     """
-    Minimal automatic scoring for Layer 2:
-    - Only scores WROTE edges (safe start)
+    Automatic scoring for Layer 2:
+    - Scores WROTE, SPAWNED, MODIFIED_REG, EXECUTED_SCRIPT edges
     - Updates Edge scoring columns
-    - Writes audit trail
+    - NO audit logging for speed
     """
 
     @staticmethod
@@ -110,85 +109,140 @@ class AutoScoringService:
         if edge.final_severity is not None:
             return edge
 
-        # Score both file writes AND process executions
-        if edge.edge_type not in (EdgeType.WROTE, EdgeType.SPAWNED):
+        # Score multiple edge types
+        if edge.edge_type not in (EdgeType.WROTE, EdgeType.SPAWNED, EdgeType.MODIFIED_REG, EdgeType.EXECUTED_SCRIPT):
             return edge
 
         target = db.query(Node).filter(Node.id == edge.target_id).first()
+        source = db.query(Node).filter(Node.id == edge.source_id).first()
+        
         if not target:
             return edge
 
-        # We only expect FILE targets for WROTE
+        # Initialize scoring variables
         file_path = target.path
-        pr = _path_risk(file_path)         # 0 or 1
-        er = _extension_risk(file_path)    # 0 or 1
+        process_name = source.name if source else None
+        pr = _path_risk(file_path)
+        er = _extension_risk(file_path)
         ent = _file_entropy(file_path, max_file_bytes)
 
         # Base score
         score = 0.10
 
-        # Risky locations + suspicious extensions are strong signals
-        if pr > 0:
-            score += 0.40
-        if er > 0:
-            score += 0.35
-
-        # Entropy high => likely encrypted/packed content (best-effort)
-        if ent is not None and ent >= 7.2:
-            score += 0.25
+        # === EDGE TYPE SPECIFIC SCORING ===
+        
+        if edge.edge_type == EdgeType.MODIFIED_REG:
+            # Registry modification - check for persistence keys
+            reg_path = file_path.lower() if file_path else ""
+            persistence_keys = ["run", "runonce", "services", "winlogon", "userinit", "shell"]
+            
+            if any(key in reg_path for key in persistence_keys):
+                score += 0.60
+            else:
+                score += 0.30
+        
+        elif edge.edge_type == EdgeType.EXECUTED_SCRIPT:
+            # Script execution - PowerShell, VBScript, etc.
+            score += 0.50
+        
+        elif edge.edge_type == EdgeType.SPAWNED:
+            # Process spawning - check for suspicious processes
+            process_lower = (target.name or "").lower()
+            
+            suspicious_processes = {
+                "cmd.exe": 0.40,  # Increased from 0.35
+                "powershell.exe": 0.50,  # Increased from 0.45
+                "pwsh.exe": 0.50,
+                "wscript.exe": 0.55,  # Increased from 0.50
+                "cscript.exe": 0.55,
+                "rundll32.exe": 0.45,  # Increased from 0.40
+                "regsvr32.exe": 0.45,
+                "mshta.exe": 0.55,
+                "certutil.exe": 0.50,
+                "bitsadmin.exe": 0.50,
+            }
+            
+            for proc, proc_score in suspicious_processes.items():
+                if proc in process_lower:
+                    score += proc_score
+                    break
+            
+            # Check command line for suspicious patterns
+            cmd_line = ""
+            if edge.edge_metadata:
+                cmd_line = (edge.edge_metadata.get("child_cmd") or "").lower()
+            
+            if cmd_line:
+                suspicious_patterns = {
+                    "-noprofile": 0.25,
+                    "-encodedcommand": 0.40,
+                    "-enc": 0.40,
+                    "-w hidden": 0.30,
+                    "-windowstyle hidden": 0.30,
+                    "invoke-expression": 0.35,
+                    "iex": 0.35,
+                    "downloadstring": 0.40,
+                    "downloadfile": 0.40,
+                    "bypass": 0.30,
+                    "base64": 0.30,
+                }
+                
+                for pattern, pattern_score in suspicious_patterns.items():
+                    if pattern in cmd_line:
+                        score += pattern_score
+        
+        elif edge.edge_type == EdgeType.WROTE:
+            # File write - original logic
+            if pr > 0:
+                score += 0.40
+            if er > 0:
+                score += 0.35
+            
+            # Entropy high => likely encrypted/packed content
+            if ent is not None and ent >= 7.2:
+                score += 0.25
 
         # Clamp
         score = max(0.0, min(1.0, score))
         
-        # HEURISTIC OVERRIDE: Filename pattern match
-        if file_path and "malware" in file_path.lower():
-            score = 1.0
-            logger.warning(f"  HEURISTIC MATCH in AutoScoring for: {file_path}")
-
+        # === BEHAVIORAL ANALYSIS ===
+        
+        # Check for rapid process spawning (multiple spawns in short time)
+        if edge.edge_type == EdgeType.SPAWNED and edge.session_id:
+            try:
+                from datetime import timedelta
+                recent_spawns = db.query(Edge).filter(
+                    Edge.session_id == edge.session_id,
+                    Edge.edge_type == EdgeType.SPAWNED,
+                    Edge.timestamp >= edge.timestamp - timedelta(seconds=10)
+                ).count()
+                
+                if recent_spawns >= 3:
+                    score += 0.30
+            except Exception:
+                pass
+        
         sev = _severity_from_score(score)
 
         edge.anomaly_score = float(score)
         edge.entropy_value = float(ent) if ent is not None else None
         edge.final_severity = sev
 
-        # Optional: store a lightweight note in edge_metadata
+        # Log detection immediately (console only, no DB)
+        if sev in (Severity.CRITICAL, Severity.WARNING):
+            logger.warning(f"[AUTO-SCORE] 🚨 {sev.value} | {edge.edge_type.value} | Score: {score:.2f} | {file_path or process_name}")
+
+        # Store lightweight metadata
         md = edge.edge_metadata or {}
         md.update({
             "layer2_auto_scored": True,
             "path_risk": pr,
             "extension_risk": er,
-            "entropy_computed": ent is not None,
         })
         edge.edge_metadata = md
 
+        # Single commit - no audit logging for speed
         db.commit()
         db.refresh(edge)
-
-        # Audit trail (best-effort; should not break scoring)
-        try:
-            AuditLogger.log(
-                db,
-                source="layer2.scoring",
-                action="edge_scored",
-                level="INFO",
-                message=f"Scored edge_id={edge.id} severity={sev.value} score={score:.3f}",
-                entity_type="edge",
-                entity_id=edge.id,
-                session_id=edge.session_id,
-                path=file_path,
-                hash_sha256=target.hash_sha256,
-                payload={
-                    "edge_type": edge.edge_type.value,
-                    "score": score,
-                    "severity": sev.value,
-                    "entropy": ent,
-                    "path_risk": pr,
-                    "extension_risk": er,
-                },
-                commit=True,
-            )
-        except Exception:
-            # Don’t fail the request if audit logging fails
-            pass
 
         return edge

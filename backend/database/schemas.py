@@ -29,7 +29,6 @@ class NodeResponse(BaseModel):
 
 # EDGE SCHEMAS
 class EdgeCreate(BaseModel):
-    """Schema for creating a new edge."""
     source_id: int
     target_id: int
     edge_type: EdgeType
@@ -65,7 +64,6 @@ class EdgeResponse(BaseModel):
 
 # INCIDENT SCHEMAS
 class IncidentCreate(BaseModel):
-    """Schema for creating a new incident."""
     session_id: str
     confidence: float = Field(..., ge=0.0, le=1.0)
     severity: Severity
@@ -74,15 +72,15 @@ class IncidentCreate(BaseModel):
 
 
 class IncidentUpdate(BaseModel):
-    """Schema for updating incident."""
     status: Optional[Status] = None
     analyst_notes: Optional[str] = None
-    mtti_seconds: Optional[int] = None
+    mtti_seconds: Optional[int] = None  # Analyst response time
+    detection_seconds: Optional[float] = None  # AI detection time
+    first_event_timestamp: Optional[datetime] = None  # First event time
     resolved_at: Optional[datetime] = None
 
 
 class IncidentResponse(BaseModel):
-    """Schema for returning incident data."""
     id: int
     session_id: str
     created_at: datetime
@@ -92,7 +90,9 @@ class IncidentResponse(BaseModel):
     narrative: Optional[str]
     status: str
     analyst_notes: Optional[str]
-    mtti_seconds: Optional[int]
+    mtti_seconds: Optional[int]  # Analyst response time
+    detection_seconds: Optional[float]  # AI detection time
+    first_event_timestamp: Optional[datetime]  # First event time
     resolved_at: Optional[datetime]
 
     class Config:
@@ -100,7 +100,6 @@ class IncidentResponse(BaseModel):
 
 # QUARANTINE SCHEMAS
 class QuarantineCreate(BaseModel):
-    """Schema for quarantining a file."""
     original_path: str
     hash_sha256: str
     detection_layer: Optional[str] = None
@@ -110,12 +109,10 @@ class QuarantineCreate(BaseModel):
 
 
 class QuarantineRestore(BaseModel):
-    """Schema for restoring a quarantined file."""
     restore_reason: str
 
 
 class QuarantineResponse(BaseModel):
-    """Schema for returning quarantine data."""
     id: int
     original_path: str
     hash_sha256: str
@@ -134,7 +131,6 @@ class QuarantineResponse(BaseModel):
 
 # WHITELIST SCHEMAS
 class WhitelistCreate(BaseModel):
-    """Schema for adding to whitelist."""
     tier: int = Field(..., ge=1, le=3)
     path: str
     hash_sha256: Optional[str] = None
@@ -143,7 +139,6 @@ class WhitelistCreate(BaseModel):
 
 
 class WhitelistResponse(BaseModel):
-    """Schema for returning whitelist data."""
     id: int
     tier: int
     path: str
@@ -157,13 +152,11 @@ class WhitelistResponse(BaseModel):
 
 # FEEDBACK SCHEMAS
 class FeedbackCreate(BaseModel):
-    """Schema for submitting feedback."""
     feedback_type: str = Field(..., pattern="^(TP|FP|UNKNOWN)$")
     analyst_comment: Optional[str] = None
 
 
 class FeedbackResponse(BaseModel):
-    """Schema for returning feedback data."""
     id: int
     incident_id: int
     feedback_type: str
@@ -175,13 +168,11 @@ class FeedbackResponse(BaseModel):
 
 # VIRUSTOTAL CACHE SCHEMAS
 class VTCacheCreate(BaseModel):
-    """Schema for creating VT cache entry."""
     hash_sha256: str
     score: float = Field(..., ge=0.0, le=1.0)
 
 
 class VTCacheResponse(BaseModel):
-    """Schema for returning VT cache data."""
     hash_sha256: str
     score: float
     queried_at: datetime
@@ -191,7 +182,6 @@ class VTCacheResponse(BaseModel):
 
 # POLICY SCHEMAS
 class PolicyConfigOut(BaseModel):
-    """Schema for returning policy config data."""
     auto_response_enabled: bool
     kill_on_alert: bool
     quarantine_on_warn: bool
@@ -201,7 +191,6 @@ class PolicyConfigOut(BaseModel):
         from_attributes = True
 
 class PolicyConfigUpdate(BaseModel):
-    """Schema for updating policy config data."""
     auto_response_enabled: Optional[bool] = None
     kill_on_alert: Optional[bool] = None
     quarantine_on_warn: Optional[bool] = None
@@ -209,7 +198,6 @@ class PolicyConfigUpdate(BaseModel):
 
 # AGGREGATE RESPONSE SCHEMAS
 class IncidentDetailResponse(BaseModel):
-    """Schema for detailed incident response."""
     incident: IncidentResponse
     edges: List[EdgeResponse]
     nodes: List[NodeResponse]
@@ -219,14 +207,14 @@ class IncidentDetailResponse(BaseModel):
 
 
 class DashboardStatsResponse(BaseModel):
-    """Schema for dashboard statistics."""
     total_incidents: int
     critical_count: int
     warning_count: int
     unknown_count: int
     benign_count: int
     false_positive_count: int
-    mtti_average: Optional[float]
+    mtti_average: Optional[float]  # Analyst response time
+    detection_time_average: Optional[float]  # AI detection time
     model_maturity: float
 
     class Config:

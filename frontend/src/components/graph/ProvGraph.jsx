@@ -15,7 +15,6 @@ const ALL_EDGE_TYPES = [
   "INJECTED_INTO",
   "READ",
   "SUBSCRIBED_WMI",
-  "DISABLED_AMSI",
 ];
 
 // Initial state: only show process-centric edges to reduce noise

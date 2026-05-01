@@ -32,10 +32,8 @@ class VotingEngine:
     ) -> Severity:
         """
         Voting logic for severity decision.
-        
         Inputs:
         - has_injection: INJECTED_INTO edge detected
-        - has_amsi_disable: DISABLED_AMSI edge detected
         - score_2a: Math certainty (0.0-1.0)
         - score_2b: Statistical impossibility (0.0-1.0)
         - score_2c: ML graph anomaly (0.0-1.0)
@@ -54,17 +52,9 @@ class VotingEngine:
         9. If (single weak signal) → UNKNOWN
         10. Else → BENIGN
         """
-        
-        logger.debug(f"🤖 Voting: injection={has_injection}, amsi={has_amsi_disable}, 2A={score_2a:.2f}, 2B={score_2b:.2f}, 2C={score_2c:.2f}")
-        
         # CRITICAL: Injection detected (instant)
         if has_injection:
             logger.warning("  CRITICAL: Code injection detected")
-            return Severity.CRITICAL
-        
-        # CRITICAL: AMSI disabled (instant)
-        if has_amsi_disable:
-            logger.warning("  CRITICAL: AMSI disabled (tampering)")
             return Severity.CRITICAL
         
         # CRITICAL: Math AND ML high

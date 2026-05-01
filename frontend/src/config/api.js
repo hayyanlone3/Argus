@@ -10,7 +10,9 @@ import axios from 'axios';
 // ═══════════════════════════════════════════════════════════════
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api';
+  import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+
+const API_ROOT_URL = API_BASE_URL.replace(/\/?api\/?$/, '');
 
 const API_TIMEOUT = Number(import.meta.env.VITE_API_TIMEOUT || 30000);
 const DEBUG = (import.meta.env.VITE_DEBUG || 'true') === 'true';
@@ -58,7 +60,9 @@ export const apiDelete = async (url, config = {}) => {
 
 export const checkHealth = async () => {
   try {
-    const response = await apiClient.get('/health');
+    const response = await axios.get(`${API_ROOT_URL}/health`, {
+      timeout: API_TIMEOUT,
+    });
     return response.data;
   } catch (error) {
     console.error('API health check failed:', error);

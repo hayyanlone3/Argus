@@ -152,7 +152,7 @@ export default function Dashboard() {
 
       {/* Quick stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-linear-to-br from-white to-slate-50 p-6 shadow-sm">
           <div className="flex items-center gap-2 mb-2">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-500" viewBox="0 0 20 20" fill="currentColor">
               <path d="M13 6a3 3 0 11-6 0 3 3 0 016 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM14 15a4 4 0 00-8 0v3h8v-3zM6 8a2 2 0 11-4 0 2 2 0 014 0zM16 18v-3a5.972 5.972 0 00-.75-2.906A3.005 3.005 0 0119 15v3h-3zM4.75 12.094A5.973 5.973 0 004 15v3H1v-3a3 3 0 013.75-2.906z" />
@@ -165,7 +165,7 @@ export default function Dashboard() {
           <div className="text-sm font-medium text-slate-500 mt-2">Analyst feedback rate (weekly)</div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-linear-to-br from-white to-slate-50 p-6 shadow-sm">
           <div className="flex items-center gap-2 mb-2">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-rose-500" viewBox="0 0 20 20" fill="currentColor">
               <path fillRule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clipRule="evenodd" />
@@ -175,10 +175,9 @@ export default function Dashboard() {
           <div className="text-3xl font-extrabold text-slate-900 mt-1">
             {num(normalized.fpRate, 0).toFixed(1)}%
           </div>
-          <div className="text-sm font-medium text-slate-500 mt-2">Weekly metric</div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-linear-to-br from-white to-slate-50 p-6 shadow-sm">
           <div className="flex items-center gap-2 mb-2">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor">
               <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
@@ -236,13 +235,13 @@ export default function Dashboard() {
 
         {/* Feed Content */}
         <div className="p-6 bg-white">
-          <IncidentFeed severity={selectedSeverity} limit={20} />
+          <IncidentFeed severity={selectedSeverity} limit={20} showMalwareToggle={false} />
         </div>
       </div>
 
       {/* Pro Tip */}
       <div className="flex items-start gap-4 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5 shadow-sm">
-        <div className="flex-shrink-0 rounded-full bg-white p-2 shadow-sm border border-indigo-100">
+        <div className="shrink-0 rounded-full bg-white p-2 shadow-sm border border-indigo-100">
           <span className="text-xl leading-none block">💡</span>
         </div>
         <div className="text-indigo-900 text-sm font-medium pt-1">

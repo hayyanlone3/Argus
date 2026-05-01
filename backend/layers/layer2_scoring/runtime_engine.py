@@ -268,15 +268,6 @@ def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
         if evt.kind == "PROCESS_CREATE" and evt.child_cmd:
             cmd = (evt.child_cmd or "").lower()
             
-            # SIMULATION FOLDER DETECTION - High priority!
-            is_from_simulation = False
-            if evt.child_process and "simulation" in evt.child_process.lower():
-                is_from_simulation = True
-            if evt.target_path and "simulation" in evt.target_path.lower():
-                is_from_simulation = True
-            if evt.parent_process and "simulation" in evt.parent_process.lower():
-                is_from_simulation = True
-            
             # Tier 1: ACTUAL attack indicators (these alone trigger high score)
             tier1_attack_patterns = [
                 "downloadstring",
@@ -305,12 +296,7 @@ def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
                 has_tier1 = any(pattern in cmd for pattern in tier1_attack_patterns)
                 has_tier2 = any(pattern in cmd for pattern in tier2_supporting_patterns)
                 
-                # SIMULATION + malicious pattern = 1.0 score (guaranteed detection)
-                if is_from_simulation and has_tier1:
-                    score = 1.0
-                    reasons.append("simulation_malware_tier1_attack")
-                    logger.error(f"  MALWARE SIMULATION DETECTED: {cmd[:100]}")
-                elif has_tier1:
+                if has_tier1:
                     score += 0.90
                     reasons.append("malicious_powershell_pattern")
                     logger.error(f"  LAYER A: Malicious PowerShell detected: {cmd[:100]}")
@@ -799,8 +785,6 @@ def check_path_legitimacy(path: str) -> Dict[str, Any]:
     # Tier 4: Suspicious locations
     suspicious_locs = [
         "\\temp\\", "\\appdata\\local\\temp\\", "\\public\\", "\\programdata\\",
-        "\\simulations\\",  # ARGUS malware simulations
-        "argus\\simulations",  # Relative path variant
     ]
     for loc in suspicious_locs:
         if loc in p:
@@ -854,7 +838,7 @@ def check_command_legitimacy(evt: TelemetryEvent) -> Dict[str, Any]:
             return result
 
     # If launching a .bat/.ps1 from a suspicious location, flag it
-    for loc in ["\\public\\", "\\programdata\\", "\\temp\\", "\\simulations\\"]:
+    for loc in ["\\public\\", "\\programdata\\", "\\temp\\"]:
         if loc in cmd:
             result["legitimate_command"] = False
             result["command_type"] = "suspicious_launch"
@@ -1036,10 +1020,8 @@ def apply_legitimacy_verdict(
     
     # CRITICAL FIX: NEVER override MALWARE ALERT or high scores with attack patterns
     has_attack_cmd = evidence.get("command", {}).get("command_type") == "attack"
-    is_simulation_path = "simulation" in evidence.get("explanation", "").lower()
-    
     # If it's clearly malware (high fusion score + attack pattern), NEVER reduce
-    if fusion_score >= 0.85 and (has_attack_cmd or is_simulation_path):
+    if fusion_score >= 0.85 and has_attack_cmd:
         result["adjusted_score"] = round(fusion_score, 3)
         result["adjusted_decision"] = "MALWARE ALERT"
         result["rule"] = "malware_confirmed_no_override"
@@ -1069,7 +1051,7 @@ def apply_legitimacy_verdict(
             result["adjusted_score"] = round(fusion_score * 0.5, 3)
             result["adjusted_decision"] = fusion_decision if fusion_score >= 0.85 else "SUSPICIOUS"
             result["rule"] = "evidence_based_likely_legitimate"
-    elif has_attack_cmd or is_simulation_path:
+    elif has_attack_cmd:
         result["adjusted_score"] = 1.0
         result["adjusted_decision"] = "MALWARE ALERT"
         result["rule"] = "attack_pattern_detected"
@@ -1133,22 +1115,11 @@ class Layer2RuntimeEngine:
             try:
                 evt: TelemetryEvent = SCORING_QUEUE.get(timeout=0.5)
                 
-                # FORCE LOG EVERY EVENT
-                logger.info(f"[ENGINE] ✅ EVENT RECEIVED from queue")
-                logger.info(f"[ENGINE]   Kind: {evt.kind}")
-                logger.info(f"[ENGINE]   Child: {evt.child_process}")
-                logger.info(f"[ENGINE]   Parent: {evt.parent_process}")
-                logger.info(f"[ENGINE]   Cmd: {evt.child_cmd[:100] if evt.child_cmd else 'None'}")
-                logger.info(f"[ENGINE]   PID: {evt.child_pid}")
-                
-                # Only log high-priority events to reduce noise
+                # Only log suspicious events to reduce noise
                 if evt.kind in ["PROCESS_CREATE"] and any(x in (evt.child_process or "").lower() for x in ["cmd.exe", "powershell", "wscript", "cscript"]):
-                    logger.info(f"[ENGINE] Processing suspicious: {evt.kind} - {evt.child_process}")
+                    logger.info(f"[ENGINE] Processing: {evt.kind} - {evt.child_process}")
             except Exception as e:
-                # Don't silently ignore - log the error!
-                if "timed out" not in str(e).lower():
-                    logger.error(f"[ENGINE] ❌ Error getting event from queue: {e}")
-                    logger.exception(f"[ENGINE] Full traceback:")
+                # Timeout is normal, don't log it
                 continue
 
             try:
@@ -1220,52 +1191,37 @@ class Layer2RuntimeEngine:
 
                 fused = fuse(a["score"], b["score"], c["score"])
 
-                # EVIDENCE-BASED LEGITIMACY VERIFICATION
-                # Only run for PROCESS_CREATE events that scored above suspicious threshold
+                # EVIDENCE-BASED LEGITIMACY VERIFICATION - SIMPLIFIED
+                # Only run for high-scoring PROCESS_CREATE events
                 legitimacy_evidence = None
                 
-                # CRITICAL: Never run legitimacy check if MALICIOUS COMMAND detected
+                # Skip legitimacy check if clearly malware
                 cmd_lower = (evt.child_cmd or "").lower()
                 has_malicious_cmd = any(p in cmd_lower for p in [
                     "downloadstring", "invoke-webrequest", "iex(", 
                     "invoke-expression", "frombase64string", "-encodedcommand"
                 ])
                 
-                # Also check if path is in simulations folder
-                is_simulation = False
-                if evt.child_process and "simulation" in evt.child_process.lower():
-                    is_simulation = True
-                if evt.target_path and "simulation" in evt.target_path.lower():
-                    is_simulation = True
-                
-                # HIGH CONFIDENCE MALWARE: Skip legitimacy check entirely
+                # HIGH CONFIDENCE MALWARE: Skip legitimacy check
                 if (fused.get("decision") == "MALWARE ALERT" and 
-                    (has_malicious_cmd or fused.get("final_score", 0) >= 0.90 or is_simulation)):
-                    logger.error(f"[MALWARE] High-confidence malware detected - skipping legitimacy override")
+                    (has_malicious_cmd or fused.get("final_score", 0) >= 0.90)):
                     fused["legitimacy"] = {
-                        "original_score": round(fused.get("final_score", 0), 3),
                         "adjusted_score": round(fused.get("final_score", 0), 3),
                         "adjusted_decision": "MALWARE ALERT",
                         "verdict": "MALWARE",
-                        "confidence": "high",
                         "rule": "malware_no_override",
-                        "explanation": "High-confidence malware - legitimacy check skipped"
                     }
-                elif evt.kind == "PROCESS_CREATE" and fused.get("final_score", 0) >= 0.30:
+                elif evt.kind == "PROCESS_CREATE" and fused.get("final_score", 0) >= 0.70:
+                    # Only run expensive legitimacy check for borderline cases
                     legitimacy_evidence = LegitimacyVerifier.verify(evt)
                     
-                    # If command has malicious patterns, DON'T let legitimacy override
-                    if has_malicious_cmd or is_simulation:
-                        logger.error(f"[MALWARE] Malicious command/simulation detected - keeping malware verdict")
+                    if has_malicious_cmd:
                         legitimacy_evidence["verdict"] = "MALWARE"
                         verdict_result = {
-                            "original_score": round(fused.get("final_score", 0), 3),
                             "adjusted_score": round(fused.get("final_score", 0), 3),
                             "adjusted_decision": "MALWARE ALERT",
                             "verdict": "MALWARE",
-                            "confidence": "high",
                             "rule": "malicious_cmd_no_override",
-                            "explanation": "Malicious command pattern detected"
                         }
                     else:
                         verdict_result = apply_legitimacy_verdict(
@@ -1277,22 +1233,6 @@ class Layer2RuntimeEngine:
                     fused["legitimacy"] = verdict_result
                     fused["final_score"] = verdict_result["adjusted_score"]
                     fused["decision"] = verdict_result["adjusted_decision"]
-                    fused["rule"] = str(fused.get("rule", "")) + " + " + verdict_result["rule"]
-                elif evt.kind == "PROCESS_CREATE":
-                    # Low score — still collect evidence for completeness but don't adjust
-                    legitimacy_evidence = LegitimacyVerifier.verify(evt)
-                    fused["legitimacy"] = {
-                        "original_score": round(fused.get("final_score", 0), 3),
-                        "original_decision": fused.get("decision", "NORMAL"),
-                        "adjusted_score": round(fused.get("final_score", 0), 3),
-                        "adjusted_decision": fused.get("decision", "NORMAL"),
-                        "verdict": legitimacy_evidence.get("verdict", "UNCERTAIN"),
-                        "confidence": legitimacy_evidence.get("confidence", "low"),
-                        "evidence_positive": legitimacy_evidence.get("positive_evidence", 0),
-                        "evidence_total": legitimacy_evidence.get("total_checks", 0),
-                        "explanation": legitimacy_evidence.get("explanation", ""),
-                        "rule": "low_score_no_adjustment",
-                    }
 
                 # FILE_CREATE legitimacy check for known system/temp patterns
                 if evt.kind == "FILE_CREATE":
@@ -1323,24 +1263,11 @@ class Layer2RuntimeEngine:
                     else:
                         logger.debug(f"[LEGIT] FILE_CREATE but target_path is None for event")
 
-                # Debug logging for all scored events (helps tune thresholds)
-                if a["score"] > 0.3 or b["score"] > 0.3 or c["score"] > 0.3:
-                    logger.info(f"[SCORING] {evt.kind} | {evt.child_process or evt.target_path}")
-                    logger.info(f"   Layers: A={a['score']:.2f}, B={b['score']:.2f}, C={c['score']:.2f}")
-                    logger.info(f"   Final: {fused.get('final_score'):.3f} → {fused.get('decision')}")
-                
-                # Enhanced logging for malware detection
-                if fused.get("decision") == "MALWARE ALERT":
-                    logger.error(f"  MALWARE ALERT DETECTED!")
-                    logger.error(f"   Process: {evt.child_process or evt.target_path}")
-                    logger.error(f"   Session: {evt.session_id}")
-                    logger.error(f"   Score: {fused.get('final_score'):.3f}")
-                    logger.error(f"   Layers: A={a['score']:.2f}, B={b['score']:.2f}, C={c['score']:.2f}")
-                elif fused.get("decision") == "SUSPICIOUS":
-                    logger.warning(f"⚠️  SUSPICIOUS activity detected")
-                    logger.warning(f"   Process: {evt.child_process or evt.target_path}")
-                    logger.warning(f"   Session: {evt.session_id}")
-                    logger.warning(f"   Score: {fused.get('final_score'):.3f}")
+                # Only log detections (single line per event)
+                if fused.get("decision") in ("MALWARE ALERT", "SUSPICIOUS"):
+                    logger.warning(
+                        f"[DETECTION] {fused.get('decision')} | Score: {fused.get('final_score'):.2f} | {evt.child_process or evt.target_path}"
+                    )
                 
                 # Apply Layer 0 overrides to fusion score/decision
                 if layer0_result:
@@ -1358,12 +1285,6 @@ class Layer2RuntimeEngine:
                         fused["final_score"] = max(float(fused.get("final_score", 0.0)), 0.50)
                         fused["rule"] = str(fused.get("rule", "")) + " + layer0_warn_override"
 
-                # Only log significant detections to reduce noise
-                if fused.get("final_score", 0) > 0.5:
-                    logger.warning(f"[DETECTION] {evt.kind} | Score: {fused.get('final_score')} | Decision: {fused.get('decision')} | Process: {evt.child_process or evt.target_path}")
-                    if fused.get("final_score", 0) > 0.7:
-                        logger.warning(f"[REASONS] {a['reasons'] + b['reasons'] + c['reasons']}")
-                
                 # Auto-response logic
                 ml_ready = (not RIVER_AVAILABLE) or (_ML_MODEL is None) or (_ML_SEEN >= warmup)
 
@@ -1396,12 +1317,6 @@ class Layer2RuntimeEngine:
                 is_kill_enabled = policy.get("kill_on_alert", False)
                 is_quarantine_enabled = policy.get("quarantine_on_warn", True)
                 
-                # Only enable auto-response if explicitly enabled in policy
-                if is_auto_response:
-                    logger.info(f"[AUTO-RESPONSE] Quarantine + Suspend ENABLED - Malware will be suspended and quarantined")
-                else:
-                    logger.info(f"[AUTO-RESPONSE] DISABLED - Malware will be detected but not automatically quarantined")
-                
                 # CRITICAL: Never auto-kill in development/testing environments
                 # Auto-kill is DISABLED by default for safety
                 # Only enable in production with careful testing
@@ -1428,6 +1343,9 @@ class Layer2RuntimeEngine:
                 
                 # DEV TOOL SPAWN EXCEPTIONS: Only flag if MALICIOUS COMMAND present
                 child_cmd_lower = (evt.child_cmd or "").lower()
+                child_name = (evt.child_process or "").split("\\")[-1].lower()
+                parent_name = (evt.parent_process or "").split("\\")[-1].lower()
+                
                 is_dev_spawn = any(safe_parent in parent_name for safe_parent in safe_parent_processes)
                 has_malicious_cmd = any(p in child_cmd_lower for p in [
                     "downloadstring", "invoke-webrequest", "iwr ", "wget ",
@@ -1441,9 +1359,6 @@ class Layer2RuntimeEngine:
                     fused["decision"] = "NORMAL"
                     fused["rule"] = "dev_tool_legitimate_spawn"
                     should_kill = False
-                
-                child_name = (evt.child_process or "").split("\\")[-1].lower()
-                parent_name = (evt.parent_process or "").split("\\")[-1].lower()
                 
                 # Check if child is protected
                 if child_name in safe_processes or any(app in child_name for app in safe_processes):
@@ -1465,12 +1380,6 @@ class Layer2RuntimeEngine:
                             logger.warning("🛡️  Protected IDE terminal shell from being killed.")
                         should_kill = False
                 
-                # SAFETY: Log kill attempts for review
-                if should_kill:
-                    logger.error(f"⚠️  AUTO-RESPONSE TRIGGERED: Process={child_name}, PID={evt.child_pid}, Parent={parent_name}")
-                    logger.error(f"   Command: {evt.child_cmd[:100] if evt.child_cmd else 'N/A'}")
-                    logger.error(f"   Score: {fused.get('final_score')}, Decision: {fused.get('decision')}")
-
                 # IMPROVED: Suspend + Quarantine instead of Kill
                 suspended = False
                 if is_auto_response and is_kill_enabled and should_kill:
@@ -1570,15 +1479,15 @@ class Layer2RuntimeEngine:
                         for k in list(LATEST_DECISIONS.keys())[:500]:
                             LATEST_DECISIONS.pop(k, None)
 
-                # CREATE OR UPDATE INCIDENT FOR LAYER 5 LEARNING
-                if connection.SessionLocal is not None and fused.get("final_score", 0) >= policy.get("min_final_score_incident", 0.5):
+                # CREATE INCIDENT ONLY FOR HIGH-CONFIDENCE DETECTIONS
+                if connection.SessionLocal is not None and fused.get("final_score", 0) >= 0.70:
                     try:
                         from backend.database.models import Incident
                         from backend.shared.enums import Severity
                         
                         db = connection.SessionLocal()
                         
-                        # Determine severity based on decision
+                        # Determine severity
                         if fused.get("decision") == "MALWARE ALERT":
                             severity = Severity.CRITICAL
                         elif fused.get("decision") == "SUSPICIOUS":
@@ -1586,31 +1495,18 @@ class Layer2RuntimeEngine:
                         else:
                             severity = Severity.UNKNOWN
                         
-                        # Check if incident already exists for this session
+                        # Check if incident exists
                         existing_incident = db.query(Incident).filter(Incident.session_id == evt.session_id).first()
                         
                         if existing_incident:
-                            # Update existing incident if new severity is higher or confidence increased
+                            # Update only if severity increased
                             severity_order = {"BENIGN": 0, "UNKNOWN": 1, "WARNING": 2, "CRITICAL": 3}
-                            current_severity_level = severity_order.get(existing_incident.severity.value, 0)
-                            new_severity_level = severity_order.get(severity.value, 0)
-                            
-                            if new_severity_level > current_severity_level:
+                            if severity_order.get(severity.value, 0) > severity_order.get(existing_incident.severity.value, 0):
                                 existing_incident.severity = severity
-                                logger.warning(f"🔺 Escalated incident {evt.session_id}: {existing_incident.severity.value} → {severity.value}")
-                            
-                            # Always update confidence to latest score
-                            new_confidence = float(fused.get("final_score", 0))
-                            if new_confidence > existing_incident.confidence:
-                                existing_incident.confidence = new_confidence
-                            
-                            # Update narrative with latest event
-                            existing_incident.narrative = f"{existing_incident.narrative}\n{evt.kind}: {evt.child_process or evt.target_path}"
-                            
-                            db.commit()
-                            logger.info(f"✏️  Updated incident: {evt.session_id} (confidence={new_confidence:.2f})")
+                                existing_incident.confidence = float(fused.get("final_score", 0))
+                                db.commit()
                         else:
-                            # Create new incident record
+                            # Create new incident
                             incident = Incident(
                                 session_id=evt.session_id,
                                 confidence=float(fused.get("final_score", 0)),
@@ -1618,13 +1514,11 @@ class Layer2RuntimeEngine:
                                 mitre_stage=None,
                                 narrative=f"{evt.kind}: {evt.child_process or evt.target_path}",
                             )
-                            
                             db.add(incident)
                             db.commit()
-                            logger.warning(f"  Created incident: {evt.session_id} ({severity.value}, confidence={incident.confidence:.2f})")
+                            logger.warning(f"[INCIDENT] Created: {evt.session_id} ({severity.value})")
                         
-                    except Exception as incident_error:
-                        logger.error(f"❌ Failed to create/update incident: {incident_error}")
+                    except Exception:
                         if 'db' in locals():
                             try:
                                 db.rollback()

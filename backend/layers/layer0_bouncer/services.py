@@ -214,18 +214,6 @@ class BouncerService:
         vt_score: float,
         db: Session
     ) -> dict:
-        # HEURISTIC OVERRIDE: For Demo/Testing
-        if file_path and "malware" in file_path.lower():
-            logger.warning(f"HEURISTIC MATCH: Malicious pattern detected in filename: {file_path}")
-            return {
-                "status": "CRITICAL",
-                "file_hash": "HEURISTIC_MATCH",
-                "entropy": 0.0,
-                "vt_score": 1.0,
-                "signals": ["Heuristic filename match (MALWARE)"],
-                "message": "Immediate block based on heuristic filename pattern"
-            }
-
         try:
             logger.info(f"Bouncer analyzing: {file_path}")
             

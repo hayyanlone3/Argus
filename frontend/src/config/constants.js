@@ -78,7 +78,6 @@ export const EDGE_TYPES = [
   'EXECUTED_SCRIPT',
   'SUBSCRIBED_WMI',
   'MODIFIED_REG',
-  'DISABLED_AMSI',
 ];
 
 export const EDGE_TYPE_COLORS = {
@@ -89,13 +88,9 @@ export const EDGE_TYPE_COLORS = {
   EXECUTED_SCRIPT: '#ffc107',
   SUBSCRIBED_WMI: '#17a2b8',
   MODIFIED_REG: '#ffc107',
-  DISABLED_AMSI: '#dc3545',
 };
 
-// ═══════════════════════════════════════════════════════════════
 // NODE TYPES
-// ═══════════════════════════════════════════════════════════════
-
 export const NODE_TYPES = [
   'process',
   'file',

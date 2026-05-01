@@ -37,7 +37,7 @@ def load_beth_model() -> dict:
             },
             "edge_baseline": {
                 "common_edge_types": ["SPAWNED", "READ", "WROTE"],
-                "rare_edge_types": ["INJECTED_INTO", "DISABLED_AMSI"]
+                "rare_edge_types": ["INJECTED_INTO"]
             }
         }
         

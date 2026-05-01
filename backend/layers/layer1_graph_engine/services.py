@@ -124,29 +124,18 @@ class GraphService:
                 f"🔗 Created edge: {edge_data.edge_type} (ID {edge_data.source_id} → {edge_data.target_id})"
             )
 
-            # NEW: Auto-score edge (Layer 2) in a safe, best-effort way
+            # Persist a baseline severity/anomaly score for graph/UI queries.
             try:
-                max_mb = int(os.getenv("ARGUS_FILE_HASH_MAX_MB", "10"))
-                AutoScoringService.score_edge(
-                    db,
-                    new_edge.id,
-                    max_file_bytes=max_mb * 1024 * 1024,
-                )
-            except Exception:
-                logger.exception(f"  Auto scoring failed for edge_id={new_edge.id}")
-
-            # After auto-scoring, refresh so severity/score are included
-            try:
+                AutoScoringService.score_edge(db, new_edge.id)
                 db.refresh(new_edge)
             except Exception:
                 pass
 
-            # NEW: Layer 3 auto-incident creation for suspicious events
+            # Layer 3 auto-incident creation for suspicious events
             try:
-                # Trigger for all edges so even harmless simulation telemetry becomes an incident
                 CorrelatorService.upsert_incident_for_session(db, new_edge.session_id)
             except Exception:
-                logger.exception("  Layer3 auto-incident creation failed")
+                logger.debug("Layer3 auto-incident creation failed")
 
             # SSE publish (best-effort, safe failure)
             try:

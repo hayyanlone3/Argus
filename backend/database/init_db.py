@@ -4,7 +4,7 @@ from sqlalchemy import inspect, text
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from database.connection import engine, SessionLocal
+from database import connection
 from database.models import Base
 from shared.logger import setup_logger
 from config import settings

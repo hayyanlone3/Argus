@@ -43,24 +43,43 @@ export default function Layer3Dashboard() {
       {/* Header */}
       <div>
         <h1>Layer 3: Correlator</h1>
-        <p className="text-gray-600">Group related events into incidents using 2-of-3 signals</p>
+        <p className="text-gray-600">Group related events into incidents using signals</p>
       </div>
 
       {/* Stats */}
       {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="card">
             <p className="text-gray-600 text-sm mb-1">Total Incidents</p>
             <p className="text-3xl font-bold text-gray-900">{stats.total_incidents || 0}</p>
           </div>
-          <div className="card">
-            <p className="text-gray-600 text-sm mb-1">MTTI (Avg)</p>
-            <p className="text-3xl font-bold text-red-600">
+          
+          {/* NEW: AI Detection Time */}
+          <div className="card bg-linear-to-br from-green-50 to-green-100 border-2 border-green-200">
+            <p className="text-gray-700 text-sm mb-1 font-semibold flex items-center gap-1">
+              AI Detection Time
+            </p>
+            <p className="text-4xl font-bold text-green-600">
+              {stats.metrics?.mean_detection_seconds !== undefined
+                ? `${stats.metrics.mean_detection_seconds.toFixed(2)}s`
+                : '0.00s'}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">Average time to detect threat</p>
+          </div>
+          
+          {/* KEEP: MTTI (Analyst Response) */}
+          <div className="card bg-linear-to-br from-blue-50 to-blue-100 border-2 border-blue-200">
+            <p className="text-gray-700 text-sm mb-1 font-semibold flex items-center gap-1">
+              MTTI (Analyst)
+            </p>
+            <p className="text-4xl font-bold text-blue-600">
               {stats.metrics?.mean_time_to_identify_seconds
                 ? `${Math.round(stats.metrics.mean_time_to_identify_seconds / 60)}m`
                 : 'N/A'}
             </p>
+            <p className="text-xs text-gray-600 mt-1">Time to analyst confirmation</p>
           </div>
+          
           <div className="card">
             <p className="text-gray-600 text-sm mb-1">FP Rate</p>
             <p className="text-3xl font-bold text-warning">

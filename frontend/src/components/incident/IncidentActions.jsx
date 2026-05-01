@@ -55,7 +55,7 @@ export default function IncidentActions({ incident, onUpdate }) {
           disabled={loading}
           className="btn-warning w-full btn-sm"
         >
-          📝 Submit Feedback
+            Submit Feedback
         </button>
         <button
           onClick={() => handleStatusChange('RESOLVED')}
