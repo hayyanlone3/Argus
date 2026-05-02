@@ -6,6 +6,7 @@ Provides scoring and decision endpoints
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
+from typing import Optional
 from backend.database.connection import get_db
 from backend.database.models import Edge, Node
 from backend.shared.logger import setup_logger
@@ -106,7 +107,10 @@ async def score_channel_2a(
 
 @router.post("/score-channel-2b")
 async def score_channel_2b(
-    edge_entropy: float = Query(..., ge=0, le=8)
+    edge_entropy: float = Query(0.0, ge=0, le=8),
+    registry_path: Optional[str] = Query(None),
+    edge_type: Optional[str] = Query(None),
+    command_line: Optional[str] = Query(None)
 ):
     """
     Calculate Channel 2B (Statistical Impossibility) score.
@@ -117,15 +121,28 @@ async def score_channel_2b(
         POST /api/layer2/score-channel-2b?edge_entropy=7.5
     """
     try:
-        score_2b = ScoringEngine.score_channel_2b(edge_entropy)
+        score_2b = ScoringEngine.score_channel_2b(
+            edge_entropy=edge_entropy,
+            registry_path=registry_path,
+            edge_type=edge_type,
+            command_line=command_line,
+        )
+
+        p_matrix_context = {
+            "registry_path": registry_path,
+            "edge_type": edge_type,
+            "command_line": command_line,
+        }
         
         return {
             "channel": "2B",
             "edge_entropy": edge_entropy,
             "score": round(score_2b, 3),
+            "p_matrix_context": p_matrix_context,
             "interpretation": {
                 "entropy": edge_entropy,
                 "baseline_mean": 5.0,
+                "registry_service_signal": bool(registry_path or edge_type or command_line),
                 "anomalous": score_2b > 0.5
             }
         }

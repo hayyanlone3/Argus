@@ -101,6 +101,26 @@ MITRE_STAGES = {
     "impact": "Impact",
 }
 
+# Event kinds used across the system (avoid magic strings)
+EVENT_KIND_PROCESS_CREATE = "PROCESS_CREATE"
+EVENT_KIND_FILE_CREATE = "FILE_CREATE"
+EVENT_KIND_REG_SET = "REG_SET"
+
+# Suspicious file-write patterns for statistical scoring
+SUSPICIOUS_FILE_PATH_FRAGMENTS = {
+    r"\appdata\local\temp",
+    r"\appdata\roaming",
+    r"\programdata",
+    r"\users\public",
+    r"\startup",
+}
+
+SUSPICIOUS_FILE_EXTENSIONS = {
+    ".exe", ".dll", ".sys", ".scr", ".com",
+    ".ps1", ".psm1", ".vbs", ".js", ".jse",
+    ".wsf", ".hta", ".bat", ".cmd", ".lnk",
+}
+
 # PAGINATION & RATE LIMITING
 DEFAULT_PAGE_SIZE = 50
 MAX_PAGE_SIZE = 1000

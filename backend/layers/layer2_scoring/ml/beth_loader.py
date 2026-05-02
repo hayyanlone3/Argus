@@ -1,27 +1,9 @@
-"""
-BETH (Benign, Malicious & High-Risk Enterprise Threats) dataset loader
-For Phase 1: stubbed, returns pre-computed baseline
-"""
-
 from shared.logger import setup_logger
 
 logger = setup_logger(__name__)
 
 
 def load_beth_model() -> dict:
-    """
-    Load pre-trained BETH baseline model.
-    
-    For Phase 1: returns hardcoded baseline
-    For Phase 2+: loads actual model from disk
-    
-    Returns:
-        {
-            "process_baseline": {...},
-            "file_baseline": {...},
-            "edge_baseline": {...}
-        }
-    """
     try:
         # Stubbed BETH baseline
         beth_baseline = {

@@ -1,24 +1,9 @@
-# backend/layers/layer2_scoring/math/anomalies.py
-"""
-Anomaly detection patterns
-"""
-
 from shared.logger import setup_logger
 
 logger = setup_logger(__name__)
 
 
 def detect_burst(values: list, threshold: float = 3.0) -> bool:
-    """
-    Detect if list of values shows burst pattern (sudden spike).
-    
-    Args:
-        values: List of numeric values
-        threshold: Z-score threshold
-        
-    Returns:
-        True if burst detected
-    """
     try:
         if len(values) < 2:
             return False
