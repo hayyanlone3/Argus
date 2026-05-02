@@ -238,12 +238,7 @@ export default function Dashboard() {
           <IncidentFeed severity={selectedSeverity} limit={20} showMalwareToggle={false} />
         </div>
       </div>
-
-      {/* Pro Tip */}
       <div className="flex items-start gap-4 rounded-2xl border border-indigo-100 bg-indigo-50/50 p-5 shadow-sm">
-        <div className="shrink-0 rounded-full bg-white p-2 shadow-sm border border-indigo-100">
-          <span className="text-xl leading-none block">💡</span>
-        </div>
         <div className="text-indigo-900 text-sm font-medium pt-1">
           <span className="font-extrabold tracking-wide uppercase text-xs text-indigo-600 bg-indigo-100/50 px-2 py-1 rounded mr-3 border border-indigo-200/50">Pro Tip</span>
           Click any incident card above to view its deep-dive details, interactive event chain graph, and submit analyst feedback.

