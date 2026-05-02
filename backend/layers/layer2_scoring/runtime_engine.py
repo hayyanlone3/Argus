@@ -448,6 +448,15 @@ def score_layer_b(evt: TelemetryEvent) -> Dict[str, Any]:
             logger.error(f"  MALWARE PATTERN in {child_name}: {cmd[:100]}")
             return {"score": 0.95, "reasons": ["malicious_command_detected", f"pattern_in_{parent_name}_spawn"]}
 
+        # Direct shell pivot: cmd.exe -> powershell.exe is a strong malware signal
+        # unless it is clearly launched from a dev tool or a trusted system parent.
+        if parent_name == "cmd.exe" and child_name == "powershell.exe":
+            logger.info(f"  Shell pivot detected: {parent_name} -> {child_name}")
+            return {
+                "score": 0.93,
+                "reasons": ["cmd_to_powershell_transition", "rare_transition"],
+            }
+
         # DEV TOOL + SHELL + NO malicious cmd = LEGITIMATE (score 0.05)
         if parent_is_dev_tool and child_is_shell and not has_malicious_cmd:
             logger.debug(f"  Legitimate dev tool spawn: {parent_name} -> {child_name}")
@@ -710,8 +719,14 @@ def fuse(a: float, b: float, c: float) -> Dict[str, Any]:
     if b > override_b and c > override_c and a > override_a:
         return {"decision": "MALWARE ALERT", "final_score": 1.0, "rule": "triple_high_override"}
 
-    final = 0.35 * a + 0.35 * b + 0.30 * c
+    final = 0.25 * a + 0.40 * b + 0.35 * c
     
+    # BOOST: Strong rare shell pivots should move the fused score into malware
+    # when B/C are both high, even if A is comparatively weak.
+    if a <= 0.20 and b >= 0.90 and c >= 0.80:
+        boost = 0.15
+        final = min(final + boost, 1.0)
+
     # BOOST: If both A and B agree strongly (even without C), increase confidence
     if a >= 0.70 and b >= 0.70:
         boost = min(0.25, (a + b) / 8)  # Up to +0.25 boost
@@ -1239,6 +1254,9 @@ class Layer2RuntimeEngine:
                 
                 # Skip legitimacy check if clearly malware
                 cmd_lower = (evt.child_cmd or "").lower()
+                parent_name = (evt.parent_process or "").split("\\")[-1].lower()
+                child_name = (evt.child_process or "").split("\\")[-1].lower()
+                pre_legitimacy_score = float(fused.get("final_score", 0.0))
                 has_malicious_cmd = any(p in cmd_lower for p in [
                     "downloadstring", "invoke-webrequest", "iex(", 
                     "invoke-expression", "frombase64string", "-encodedcommand"
@@ -1275,6 +1293,23 @@ class Layer2RuntimeEngine:
                     fused["legitimacy"] = verdict_result
                     fused["final_score"] = verdict_result["adjusted_score"]
                     fused["decision"] = verdict_result["adjusted_decision"]
+
+                    # Preserve high-risk shell pivots even when the binary path looks trusted.
+                    if (
+                        evt.kind == "PROCESS_CREATE"
+                        and parent_name == "cmd.exe"
+                        and child_name == "powershell.exe"
+                        and pre_legitimacy_score >= 0.80
+                        and not any(x in cmd_lower for x in ["vscode", "shellintegration", "shell-integration", "kiro", "opencode"])
+                    ):
+                        fused["final_score"] = round(pre_legitimacy_score, 3)
+                        fused["decision"] = "MALWARE ALERT"
+                        fused["legitimacy"] = {
+                            "adjusted_score": round(pre_legitimacy_score, 3),
+                            "adjusted_decision": "MALWARE ALERT",
+                            "verdict": "MALWARE",
+                            "rule": "high_risk_shell_pivot_no_override",
+                        }
 
                 # FILE_CREATE legitimacy check for known system/temp patterns
                 if evt.kind == "FILE_CREATE":
@@ -1400,11 +1435,20 @@ class Layer2RuntimeEngine:
                 
                 # If dev tool spawn AND no malicious command, REDUCE score significantly
                 if is_dev_spawn and not has_malicious_cmd:
-                    logger.info(f"[DEV-TOOL] Legitimate spawn: {parent_name} -> {child_name}, reducing score")
-                    fused["final_score"] = min(fused.get("final_score", 0) * 0.2, 0.3)
-                    fused["decision"] = "NORMAL"
-                    fused["rule"] = "dev_tool_legitimate_spawn"
-                    should_kill = False
+                    high_risk_shell_pivot = (
+                        parent_name == "cmd.exe"
+                        and child_name == "powershell.exe"
+                        and fused.get("final_score", 0) >= 0.80
+                        and not any(x in child_cmd_lower for x in ["vscode", "shellintegration", "shell-integration", "kiro", "opencode"])
+                    )
+                    if high_risk_shell_pivot:
+                        logger.info(f"[DEV-TOOL] Preserving high-risk shell pivot: {parent_name} -> {child_name}")
+                    else:
+                        logger.info(f"[DEV-TOOL] Legitimate spawn: {parent_name} -> {child_name}, reducing score")
+                        fused["final_score"] = min(fused.get("final_score", 0) * 0.2, 0.3)
+                        fused["decision"] = "NORMAL"
+                        fused["rule"] = "dev_tool_legitimate_spawn"
+                        should_kill = False
                 
                 # Check if child is protected
                 if child_name in safe_processes or any(app in child_name for app in safe_processes):
