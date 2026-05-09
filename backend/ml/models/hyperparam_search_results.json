@@ -1,0 +1,43 @@
+{
+  "method": "RandomizedSearchCV",
+  "n_iterations": 3,
+  "total_time_sec": 21.189082860946655,
+  "results": [
+    {
+      "iteration": 1,
+      "cfg": {
+        "n_trees": 17,
+        "height": 10,
+        "window_size": 190,
+        "seed": 42
+      },
+      "roc_auc": 0.8477162880618657,
+      "pr_auc": 0.16174443167477637,
+      "time_sec": 4.033459424972534
+    },
+    {
+      "iteration": 2,
+      "cfg": {
+        "n_trees": 23,
+        "height": 12,
+        "window_size": 179,
+        "seed": 42
+      },
+      "roc_auc": 0.8385250523602386,
+      "pr_auc": 0.13149077003767046,
+      "time_sec": 12.832801342010498
+    },
+    {
+      "iteration": 3,
+      "cfg": {
+        "n_trees": 17,
+        "height": 10,
+        "window_size": 162,
+        "seed": 42
+      },
+      "roc_auc": 0.8477162880618657,
+      "pr_auc": 0.16174443167477637,
+      "time_sec": 4.321924686431885
+    }
+  ]
+}

@@ -1,4 +1,3 @@
-# backend/layers/layer1_graph_engine/ingestion.py
 import threading
 import time
 from datetime import datetime
@@ -12,9 +11,6 @@ from backend.shared.logger import setup_logger
 logger = setup_logger(__name__)
 
 class GraphIngestionWorker:
-    """
-    Consumes TelemetryEvents from GRAPH_QUEUE and populates the DB.
-    """
     def __init__(self):
         self._stop = threading.Event()
         self._thread = None

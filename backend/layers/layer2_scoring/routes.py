@@ -1,9 +1,3 @@
-# backend/layers/layer2_scoring/routes.py
-"""
-Layer 2: Scoring API Endpoints
-Provides scoring and decision endpoints
-"""
-
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -16,6 +10,7 @@ from .voting_logic import VotingEngine
 from backend.layers.layer2_scoring.runtime_engine import LATEST_DECISIONS, LATEST_LOCK
 from backend.layers.layer2_scoring import event_stream
 from backend.layers.layer2_scoring.event_stream import TelemetryEvent, publish_event
+import os
 
 logger = setup_logger(__name__)
 
@@ -24,7 +19,6 @@ router = APIRouter()
 
 @router.get("/health")
 async def health():
-    """Layer 2: Scoring Engine health check."""
     return {
         "layer": 2,
         "name": "Scoring Engine",
@@ -40,7 +34,6 @@ async def health():
 
 @router.get("/live/ping")
 async def live_ping():
-    """Simple ping for live stream connectivity checks."""
     return {"ok": True}
 
 
@@ -49,17 +42,6 @@ async def score_channel_2a(
     process_node_id: int,
     db: Session = Depends(get_db)
 ):
-    """
-    Calculate Channel 2A (Math Certainty) score for a process.
-    
-    Analyzes:
-    - Spawn rate anomaly (>3 sigma)
-    - File rename burst (>80% writes)
-    - Edge burst (>3 sigma)
-    
-    Example:
-        POST /api/layer2/score-channel-2a?process_node_id=1
-    """
     try:
         # Verify node exists
         node = db.query(Node).filter(Node.id == process_node_id).first()
@@ -112,14 +94,7 @@ async def score_channel_2b(
     edge_type: Optional[str] = Query(None),
     command_line: Optional[str] = Query(None)
 ):
-    """
-    Calculate Channel 2B (Statistical Impossibility) score.
-    
-    Based on BETH baseline: how unlikely is this behavior?
-    
-    Example:
-        POST /api/layer2/score-channel-2b?edge_entropy=7.5
-    """
+
     try:
         score_2b = ScoringEngine.score_channel_2b(
             edge_entropy=edge_entropy,
@@ -159,14 +134,7 @@ async def score_channel_2c(
     max_depth: int = Query(0, ge=0),
     branching_factor: float = Query(0.0, ge=0)
 ):
-    """
-    Calculate Channel 2C (ML Graph Anomaly) score.
-    
-    Uses graph topology features.
-    
-    Example:
-        POST /api/layer2/score-channel-2c?node_count=10&edge_count=15&branching_factor=2.5
-    """
+
     try:
         graph_features = {
             "node_count": node_count,
@@ -199,16 +167,8 @@ async def decide_severity(
     score_2b: float = Query(..., ge=0, le=1),
     score_2c: float = Query(..., ge=0, le=1)
 ):
-    """
-    Voting logic: combine 3 channels into final severity.
-    
-    Returns: BENIGN | UNKNOWN | WARNING | CRITICAL
-    
-    Example:
-        POST /api/layer2/decide-severity?score_2a=0.8&score_2b=0.7&score_2c=0.65
-    """
+
     try:
-        # Voting
         severity = VotingEngine.decide_severity(
             has_injection,
             has_amsi_disable,
@@ -247,12 +207,6 @@ async def decide_severity(
 
 @router.get("/stats")
 async def get_scoring_stats(db: Session = Depends(get_db)):
-    """
-    Get scoring statistics (number of edges scored, severity distribution).
-    
-    Example:
-        GET /api/layer2/stats
-    """
     try:
         total_edges = db.query(Edge).count()
         
@@ -274,17 +228,39 @@ async def get_scoring_stats(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/ml/save_model")
+async def save_model_now():
+    try:
+        # import inside to avoid circular imports at module import time
+        from backend.layers.layer2_scoring.runtime_engine import _ML_LOCK, _ML_MODEL
+        with _ML_LOCK:
+            if _ML_MODEL is None:
+                raise HTTPException(status_code=400, detail="No model loaded")
+            model_path = os.path.join('backend', 'ml', 'models', 'river_windows_baseline.pkl')
+            tmp_path = model_path + '.tmp'
+            try:
+                import pickle
+                with open(tmp_path, 'wb') as f:
+                    pickle.dump(_ML_MODEL, f)
+                os.replace(tmp_path, model_path)
+            except Exception as e:
+                logger.error(f"Failed to save model: {e}")
+                raise HTTPException(status_code=500, detail=str(e))
+        return {"saved": True, "path": model_path}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"save_model_now error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/live/latest")
 async def get_live_latest(
     limit: int = Query(50, ge=1, le=500),
     suspicious_only: bool = Query(True),
     min_final_score: float = Query(0.50, ge=0.0, le=1.0),
 ):
-    """
-    Return latest Layer2 live decisions produced by the runtime engine.
 
-    Defaults to suspicious_only=true to avoid flooding UI with benign events.
-    """
     try:
         with LATEST_LOCK:
             items = list(LATEST_DECISIONS.values())
@@ -342,9 +318,6 @@ async def get_live_latest(
 
 @router.get("/live/{event_id}")
 async def get_live_event(event_id: str):
-    """
-    Return one live event decision by event_id.
-    """
     try:
         with LATEST_LOCK:
             item = LATEST_DECISIONS.get(event_id)
@@ -360,29 +333,6 @@ async def get_live_event(event_id: str):
 
 @router.post("/ingest")
 async def ingest_telemetry_event(event: dict):
-    """
-    Ingest a telemetry event from external sources (e.g., malware simulators).
-    This allows processes outside the backend to send events to Layer 2.
-
-    Expected fields:
-    - event_id: str (optional, auto-generated if missing)
-    - ts: float (optional, current time if missing)
-    - source: str (e.g., "sysmon")
-    - kind: str (e.g., "PROCESS_CREATE", "FILE_CREATE", "REG_SET")
-    - session_id: str (optional)
-    - parent_process: str (optional)
-    - child_process: str (optional)
-    - parent_cmd: str (optional)
-    - child_cmd: str (optional)
-    - parent_guid: str (optional)
-    - child_guid: str (optional)
-    - parent_pid: str (optional)
-    - child_pid: str (optional)
-    - target_path: str (optional)
-    - reg_target: str (optional)
-    - reg_details: str (optional)
-    - file_entropy: float (optional)
-    """
     try:
         from backend.layers.layer2_scoring.event_stream import new_event_id
         import time
@@ -408,7 +358,6 @@ async def ingest_telemetry_event(event: dict):
 
 @router.get("/debug/stream")
 async def debug_stream():
-    """Debug stream stats for Layer 2 ingestion (queue sizes + last event)."""
     return {
         "queues": {
             "event": event_stream.EVENT_QUEUE.qsize(),
@@ -423,7 +372,6 @@ async def debug_stream():
 
 @router.get("/debug/collector")
 async def debug_collector(request: Request):
-    """Debug Sysmon collector health (query status + counters)."""
     sysmon = getattr(request.app.state, "sysmon", None)
     if not sysmon:
         return {"enabled": False, "error": "sysmon_not_initialized"}
@@ -435,7 +383,6 @@ async def debug_collector(request: Request):
 
 @router.get("/debug/collector/recent")
 async def debug_collector_recent(request: Request, limit: int = Query(5, ge=1, le=20)):
-    """Return recent Sysmon event IDs/record IDs to confirm access."""
     sysmon = getattr(request.app.state, "sysmon", None)
     if not sysmon:
         return {"enabled": False, "error": "sysmon_not_initialized"}
@@ -447,7 +394,6 @@ async def debug_collector_recent(request: Request, limit: int = Query(5, ge=1, l
 
 @router.get("/debug/engine")
 async def debug_engine(request: Request):
-    """Debug Layer 2 engine status and latest decision count."""
     engine = getattr(request.app.state, "layer2_engine", None)
     thread_alive = False
     if engine and getattr(engine, "_thread", None):

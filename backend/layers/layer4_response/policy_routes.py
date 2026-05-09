@@ -10,7 +10,6 @@ router = APIRouter()
 
 @router.get("/api/layer4/policy", response_model=PolicyConfigOut)
 def get_policy(db: Session = Depends(get_db)):
-    """Fetch the active policy. If none exists, create the default singleton."""
     policy = db.query(PolicyConfig).first()
     if not policy:
         # Create and commit the default row if table is empty

@@ -1,0 +1,10 @@
+{
+  "decision_threshold": 0.8,
+  "justification": "Balanced operating point chosen to maintain high recall (~86%) while reducing false positives compared to lower thresholds. Use 0.8 as initial deployment; tune after monitoring.",
+  "recommended_monitoring": [
+    "false_positive_rate",
+    "true_positive_rate",
+    "alerts_per_hour",
+    "analyst_feedback_ratio"
+  ]
+}

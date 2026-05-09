@@ -1,10 +1,3 @@
-# backend/layers/layer1_graph_engine/event_bus.py
-"""
-Layer 1: In-memory pub/sub event bus for SSE streaming.
-Each subscriber gets its own asyncio.Queue.
-Collectors publish node/edge events which are forwarded to connected frontends.
-"""
-
 import asyncio
 from typing import Any, Dict, Set
 

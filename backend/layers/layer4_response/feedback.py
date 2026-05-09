@@ -1,9 +1,3 @@
-# backend/layers/layer4_response/feedback.py
-"""
-Layer 4: Feedback Service
-Collects analyst feedback for model improvement
-"""
-
 from datetime import datetime
 from sqlalchemy.orm import Session
 from backend.database.models import Feedback
@@ -14,30 +8,12 @@ logger = setup_logger(__name__)
 
 
 class FeedbackService:
-    """Layer 4: Feedback Service (for Layer 5 learning)"""
-    
     @staticmethod
     def submit_feedback(
         db: Session,
         incident_id: int,
         feedback_data: FeedbackCreate
     ) -> Feedback:
-        """
-        Submit analyst feedback on incident.
-        
-        Feedback types:
-        - TP (True Positive): Correctly detected threat
-        - FP (False Positive): Incorrectly flagged benign
-        - UNKNOWN: Cannot determine
-        
-        Args:
-            db: Database session
-            incident_id: Incident ID
-            feedback_data: Feedback data
-            
-        Returns:
-            Feedback record
-        """
         try:
             # Validate feedback type
             if feedback_data.feedback_type not in ["TP", "FP", "UNKNOWN"]:
@@ -64,20 +40,6 @@ class FeedbackService:
     
     @staticmethod
     def get_feedback_stats(db: Session) -> dict:
-        """
-        Get feedback statistics for model learning.
-        
-        Args:
-            db: Database session
-            
-        Returns:
-            {
-                "total_feedback": int,
-                "tp_count": int,
-                "fp_count": int,
-                "fp_rate": float
-            }
-        """
         try:
             feedbacks = db.query(Feedback).all()
             
@@ -95,5 +57,5 @@ class FeedbackService:
             }
         
         except Exception as e:
-            logger.error(f"  Failed to get feedback stats: {e}")
+            logger.error(f"Failed to get feedback stats: {e}")
             return {}

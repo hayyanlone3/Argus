@@ -1,10 +1,4 @@
-# backend/shared/exceptions.py
-"""Custom exception classes for ARGUS."""
-
-
 class ARGUSException(Exception):
-    """Base exception for all ARGUS errors."""
-    
     def __init__(self, detail: str, error_code: str = "UNKNOWN", status_code: int = 500):
         self.detail = detail
         self.error_code = error_code

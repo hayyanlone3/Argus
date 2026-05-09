@@ -4,7 +4,6 @@ import sys
 import json
 from datetime import datetime
 
-
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload = {

@@ -9,29 +9,27 @@ VT_POSITIVE_THRESHOLD = 0.1  # >10% AV engines detect = BLOCK
 
 # Layer 2A (Math Certainty)
 SPAWN_RATE_SIGMA = 3.0
-RENAME_BURST_THRESHOLD = 0.80  # >80% files renamed
+RENAME_BURST_THRESHOLD = 0.80
 EDGE_BURST_SIGMA = 3.0
 
 # Layer 2B (Statistical)
-PMATRIX_THRESHOLD_ANOMALY = 0.001  # P < 0.001 = anomalous
+PMATRIX_THRESHOLD_ANOMALY = 0.001
 
 # LAYER 2C (ML Graph) - FIXED THRESHOLDS
-ML_THRESHOLD_HIGH = 0.90      # River fast-path threshold
-ML_THRESHOLD_MEDIUM = 0.70    # River warning threshold  
-ML_THRESHOLD_LOW = 0.50       # River detection threshold
+ML_THRESHOLD_HIGH = 0.90
+ML_THRESHOLD_MEDIUM = 0.70 
+ML_THRESHOLD_LOW = 0.50       
 
 # VOTING LOGIC THRESHOLDS
-
-DECISION_CRITICAL_MATH_ML = (0.85, 0.80)  # Increased from (0.7, 0.75) - more strict
-DECISION_CRITICAL_STAT_ML = (0.90, 0.85)  # Increased from (0.8, 0.70) - more strict
-DECISION_WARNING_MATH = 0.80  # Increased from 0.7
-DECISION_WARNING_STAT = 0.85  # Increased from 0.8
-DECISION_WARNING_ML = 0.90  # Increased from 0.85
-DECISION_UNKNOWN_ML_MIN = 0.70  # Increased from 0.60
+DECISION_CRITICAL_MATH_ML = (0.85, 0.80)  
+DECISION_CRITICAL_STAT_ML = (0.90, 0.85)  
+DECISION_WARNING_MATH = 0.80
+DECISION_WARNING_STAT = 0.85
+DECISION_WARNING_ML = 0.90
+DECISION_UNKNOWN_ML_MIN = 0.70
 DECISION_UNKNOWN_ML_MAX = 0.85
 
 # CORRELATION THRESHOLDS (Layer 3)
-
 CORRELATION_MAX_HOPS = 2
 CORRELATION_REQUIRE_SIGNALS = 2  # 2 of 3 signals
 
@@ -72,8 +70,7 @@ NEVER_TIER1_WHITELIST = {
     "mshta.exe",
 }
 
-# KNOWN PACKERS (For Entropy Exception)
-
+# (For Entropy Exception)
 KNOWN_PACKERS = {
     "UPX",
     "ASPack",
@@ -81,8 +78,6 @@ KNOWN_PACKERS = {
     "VMProtect",
     "PECompact",
 }
-
-# MITRE ATT&CK STAGES
 
 MITRE_STAGES = {
     "reconnaissance": "Reconnaissance",

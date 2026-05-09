@@ -6,7 +6,6 @@ from backend.shared.exceptions import ValidationError
 
 logger = setup_logger(__name__)
 
-
 class IsolationService:
     @staticmethod
     def suspend_process(process_id: int) -> bool:
@@ -43,9 +42,6 @@ class IsolationService:
     
     @staticmethod
     def resume_process(process_id: int) -> bool:
-        """
-        Resume a suspended process.
-        """
         try:
             if not isinstance(process_id, int) or process_id <= 0:
                 raise ValidationError("Invalid process ID")
@@ -93,10 +89,10 @@ class IsolationService:
                 return True
                 
             except psutil.NoSuchProcess:
-                logger.warning(f" Process already terminated: PID {process_id}")
+                logger.warning(f"Process already terminated: PID {process_id}")
                 return True
             except psutil.AccessDenied:
-                logger.error(f"  Access denied when trying to kill PID {process_id}. Ensure Argus is running with administrative privileges.")
+                logger.error(f"Access denied when trying to kill PID {process_id}. Ensure Argus is running with administrative privileges.")
                
             except Exception as ps_err:
                 logger.debug(f"psutil kill failed for PID {process_id}: {ps_err}. Falling back to system command.")

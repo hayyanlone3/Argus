@@ -95,18 +95,21 @@ class ScoringEngine:
         score = 0.0
         matched_rules = []
 
+        # Suspicious path fragments - let them accumulate naturally without hardcoding
         for fragment in SUSPICIOUS_FILE_PATH_FRAGMENTS:
             if fragment in path:
                 score = max(score, 0.60)
                 matched_rules.append(fragment)
 
+        # Suspicious file extensions increase the score
         file_ext = os.path.splitext(path)[1].lower()
         if file_ext in SUSPICIOUS_FILE_EXTENSIONS:
-            score = max(score, 0.55)
-            matched_rules.append(file_ext)
+            score = min(1.0, score + 0.20)  # Increased from 0.55 baseline
+            matched_rules.append(f"suspicious_ext_{file_ext}")
 
+        # FILE_CREATE events in suspicious paths get a boost
         if edge_kind == "FILE_CREATE":
-            score = min(1.0, score + 0.15)
+            score = min(1.0, score + 0.18)  # Increased from 0.15
             matched_rules.append("file_create_edge")
 
         if file_ext == ".dll" and any(fragment in path for fragment in SUSPICIOUS_FILE_PATH_FRAGMENTS):

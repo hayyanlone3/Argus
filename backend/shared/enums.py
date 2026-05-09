@@ -1,8 +1,4 @@
-# backend/shared/enums.py
-"""Shared enumerations for ARGUS."""
-
 from enum import Enum
-
 
 class NodeType(str, Enum):
     """Types of nodes in the provenance graph."""

@@ -1,6 +1,3 @@
-# backend/shared/decorators.py
-"""Utility decorators for ARGUS."""
-
 import functools
 import time
 from typing import Callable, Any
@@ -10,19 +7,17 @@ logger = setup_logger(__name__)
 
 
 def measure_execution_time(func: Callable) -> Callable:
-    """Decorator to measure and log function execution time."""
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> Any:
         start_time = time.time()
         result = func(*args, **kwargs)
         elapsed = time.time() - start_time
-        logger.debug(f"⏱️  {func.__name__} executed in {elapsed:.3f}s")
+        logger.debug(f"{func.__name__} executed in {elapsed:.3f}s")
         return result
     return wrapper
 
 
 def cache_result(ttl_seconds: int = 300) -> Callable:
-    """Decorator to cache function results for TTL seconds."""
     def decorator(func: Callable) -> Callable:
         cache = {}
         cache_times = {}
@@ -48,7 +43,6 @@ def cache_result(ttl_seconds: int = 300) -> Callable:
 
 
 def retry_on_failure(max_retries: int = 3, delay_seconds: float = 1.0) -> Callable:
-    """Decorator to retry function on failure."""
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> Any:
@@ -67,15 +61,14 @@ def retry_on_failure(max_retries: int = 3, delay_seconds: float = 1.0) -> Callab
 
 
 def log_entry_exit(func: Callable) -> Callable:
-    """Decorator to log function entry and exit."""
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> Any:
-        logger.debug(f"➡️  Entering {func.__name__}")
+        logger.debug(f"Entering {func.__name__}")
         try:
             result = func(*args, **kwargs)
-            logger.debug(f"⬅️  Exiting {func.__name__}")
+            logger.debug(f"Exiting {func.__name__}")
             return result
         except Exception as e:
-            logger.error(f"  Error in {func.__name__}: {e}")
+            logger.error(f"Error in {func.__name__}: {e}")
             raise
     return wrapper

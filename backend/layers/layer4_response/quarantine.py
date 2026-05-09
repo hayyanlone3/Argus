@@ -1,9 +1,3 @@
-# backend/layers/layer4_response/quarantine.py
-"""
-Layer 4: Quarantine Service
-Isolates suspicious files from execution
-"""
-
 import os
 import shutil
 from pathlib import Path
@@ -17,28 +11,13 @@ from backend.shared.exceptions import ValidationError, DatabaseError
 
 logger = setup_logger(__name__)
 
-
 class QuarantineService:
-    """Layer 4: Quarantine Management Service"""
-    
     @staticmethod
     def quarantine_file(
         file_path: str,
         db: Session,
         quarantine_data: QuarantineCreate
     ) -> Quarantine:
-        """
-        Move suspicious file to quarantine directory.
-        Store metadata in database.
-        
-        Args:
-            file_path: Path to file on disk
-            db: Database session
-            quarantine_data: Quarantine metadata
-            
-        Returns:
-            Quarantine record
-        """
         try:
             # Validate file exists
             if not os.path.exists(file_path):
@@ -99,18 +78,6 @@ class QuarantineService:
         db: Session,
         restore_data: QuarantineRestore
     ) -> Quarantine:
-        """
-        Restore quarantined file to original location.
-        Only after analyst verification.
-        
-        Args:
-            quarantine_id: Quarantine record ID
-            db: Database session
-            restore_data: Restore metadata
-            
-        Returns:
-            Updated Quarantine record
-        """
         try:
             quarantine = db.query(Quarantine).filter(Quarantine.id == quarantine_id).first()
             
@@ -120,7 +87,7 @@ class QuarantineService:
             if quarantine.status != "QUARANTINED":
                 raise ValidationError(f"Cannot restore: status is {quarantine.status}")
             
-            logger.info(f"🔓 Restoring file: {quarantine.quarantine_path} → {quarantine.original_path}")
+            logger.info(f"Restoring file: {quarantine.quarantine_path} → {quarantine.original_path}")
             
             # Move file back
             if os.path.exists(quarantine.quarantine_path):
@@ -130,13 +97,13 @@ class QuarantineService:
                     target_dir.mkdir(parents=True, exist_ok=True)
                     
                     shutil.move(quarantine.quarantine_path, quarantine.original_path)
-                    logger.info(f"  File restored: {quarantine.original_path}")
+                    logger.info(f"File restored: {quarantine.original_path}")
                 except PermissionError:
                     raise ValidationError(f"Cannot restore: permission denied")
                 except Exception as e:
                     raise ValidationError(f"Failed to restore: {e}")
             else:
-                logger.warning(f"   Quarantined file not found: {quarantine.quarantine_path}")
+                logger.warning(f"Quarantined file not found: {quarantine.quarantine_path}")
             
             # Update database
             quarantine.status = "RESTORED"
@@ -146,13 +113,13 @@ class QuarantineService:
             db.commit()
             db.refresh(quarantine)
             
-            logger.info(f"  Restore completed: {quarantine_id}")
+            logger.info(f"Restore completed: {quarantine_id}")
             return quarantine
         
         except ValidationError:
             raise
         except Exception as e:
-            logger.error(f"  Restore failed: {e}")
+            logger.error(f"Restore failed: {e}")
             db.rollback()
             raise DatabaseError(f"Failed to restore file: {e}")
     
@@ -164,7 +131,7 @@ class QuarantineService:
                 Quarantine.status == "QUARANTINED"
             ).order_by(Quarantine.quarantined_at.desc()).limit(limit).all()
             
-            logger.debug(f"📋 Listed {len(quarantined)} quarantined files")
+            logger.debug(f"Listed {len(quarantined)} quarantined files")
             
             return {
                 "total": len(quarantined),
@@ -172,24 +139,11 @@ class QuarantineService:
             }
         
         except Exception as e:
-            logger.error(f"  Failed to list quarantine: {e}")
+            logger.error(f"Failed to list quarantine: {e}")
             return {"total": 0, "quarantined": []}
     
     @staticmethod
     def get_quarantine_stats(db: Session) -> dict:
-        """
-        Get quarantine statistics.
-        
-        Args:
-            db: Database session
-            
-        Returns:
-            {
-                "total_quarantined": int,
-                "total_restored": int,
-                "by_layer": {...}
-            }
-        """
         try:
             total_quarantined = db.query(Quarantine).filter(
                 Quarantine.status == "QUARANTINED"

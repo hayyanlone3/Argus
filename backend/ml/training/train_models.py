@@ -38,8 +38,9 @@ def create_windows_baseline_dataset(n_samples: int = 5000) -> pd.DataFrame:
         'parent_process': [],
         'child_process': [],
         'entropy': [],
-        'file_size': [],
         'path_risk': [],
+        'p_matrix_score': [],
+        'ml_anomaly_score': [],
         'is_system32': [],
         'is_lolbin': [],
         'cmd_length': [],
@@ -52,11 +53,12 @@ def create_windows_baseline_dataset(n_samples: int = 5000) -> pd.DataFrame:
         benign_data['parent_process'].append(parent)
         benign_data['child_process'].append(child)
         benign_data['entropy'].append(np.random.normal(base_entropy, 0.5))
-        benign_data['file_size'].append(np.random.lognormal(10, 2))
         benign_data['path_risk'].append(np.random.uniform(0, base_risk))
+        benign_data['p_matrix_score'].append(np.random.uniform(0.00, 0.15))
+        benign_data['ml_anomaly_score'].append(np.random.uniform(0.00, 0.20))
         benign_data['is_system32'].append(1 if 'svc' in child or 'win' in child else 0)
         benign_data['is_lolbin'].append(1 if child in ['cmd.exe', 'powershell.exe'] else 0)
-        benign_data['cmd_length'].append(np.random.uniform(0, 50))  # Short commands
+        benign_data['cmd_length'].append(np.random.uniform(0, 50))
         benign_data['label'].append(0)
     
     # Malicious Windows behavior (15%)
@@ -86,8 +88,9 @@ def create_windows_baseline_dataset(n_samples: int = 5000) -> pd.DataFrame:
         'parent_process': [],
         'child_process': [],
         'entropy': [],
-        'file_size': [],
         'path_risk': [],
+        'p_matrix_score': [],
+        'ml_anomaly_score': [],
         'is_system32': [],
         'is_lolbin': [],
         'cmd_length': [],
@@ -100,8 +103,9 @@ def create_windows_baseline_dataset(n_samples: int = 5000) -> pd.DataFrame:
         malicious_data['parent_process'].append(parent)
         malicious_data['child_process'].append(child)
         malicious_data['entropy'].append(np.random.normal(base_entropy, 0.3))
-        malicious_data['file_size'].append(np.random.lognormal(12, 1))
         malicious_data['path_risk'].append(np.random.uniform(base_risk - 0.1, base_risk + 0.05))
+        malicious_data['p_matrix_score'].append(np.random.uniform(0.70, 1.00))
+        malicious_data['ml_anomaly_score'].append(np.random.uniform(0.60, 1.00))
         malicious_data['is_system32'].append(0)  # Malware rarely in system32
         malicious_data['is_lolbin'].append(1 if child in ['cmd.exe', 'powershell.exe'] else 0)
         malicious_data['cmd_length'].append(np.random.uniform(cmd_len - 50, cmd_len + 100))
@@ -115,11 +119,19 @@ def create_windows_baseline_dataset(n_samples: int = 5000) -> pd.DataFrame:
 
 
 def extract_features(df: pd.DataFrame) -> tuple:
-    X = df[[
+    feature_columns = [
         'entropy',
-        'file_size',
-        'path_risk'
-    ]].copy()
+        'path_risk',
+        'p_matrix_score',
+        'ml_anomaly_score',
+    ]
+
+    X = pd.DataFrame(index=df.index)
+    for column in feature_columns:
+        if column in df.columns:
+            X[column] = pd.to_numeric(df[column], errors='coerce').fillna(0.0)
+        else:
+            X[column] = 0.0
     
     # Encode categorical features
     parent_encoding = {
@@ -153,16 +165,16 @@ def train_models(X_train, X_test, y_train, y_test, output_dir: str = "backend/ml
     
     print(f"River HalfSpaceTrees trained")
     
-    # ========== Feature Scaler ==========
-    print("\n  Fitting Feature Scaler...")
+    # Feature Scaler 
+    print("\nFitting Feature Scaler...")
     scaler = StandardScaler()
     scaler.fit(X_train)
     print(f"  Feature Scaler fitted")
     
     import pickle
-    with open(os.path.join(output_dir, 'river_halfspace_model.pkl'), 'wb') as f:
+    with open(os.path.join(output_dir, 'river_windows_baseline.pkl'), 'wb') as f:
         pickle.dump(river_model, f)
-    print(f"  Saved: river_halfspace_model.pkl")
+    print(f"  Saved: river_windows_baseline.pkl")
     
     joblib.dump(scaler, os.path.join(output_dir, 'feature_scaler.pkl'))
     print(f"  Saved: feature_scaler.pkl")
@@ -171,7 +183,6 @@ def train_models(X_train, X_test, y_train, y_test, output_dir: str = "backend/ml
         'river_model': river_model,
         'scaler': scaler,
         }
-
 
 def main():
     # Check if real data exists
@@ -203,25 +214,17 @@ def main():
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42, stratify=y
     )
-    print(f"  Training set: {X_train.shape}")
-    print(f"  Test set: {X_test.shape}")
+    print(f"Training set: {X_train.shape}")
+    print(f"Test set: {X_test.shape}")
     
     # Train models
     results = train_models(X_train, X_test, y_train, y_test)
-    
-    print("\n" + "="*60)
-    print("  TRAINING COMPLETE")
-    print("="*60)
-    print("\nModels saved to: backend/ml/models/")
-    
+
     if os.path.exists(real_data_file):
         print("Models trained on REAL Windows telemetry")
     else:
         print("Models trained on synthetic data")
         print("Collect real data for better accuracy")
     
-    print("\nReady for deployment!")
-
-
 if __name__ == "__main__":
     main()

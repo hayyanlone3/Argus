@@ -14,16 +14,16 @@ LAST_EVENT: Optional[Dict[str, Any]] = None
 
 # shared queue for telemetry events (sysmon → layer2 workers)
 # shared queues for telemetry events
-EVENT_QUEUE: "Queue[TelemetryEvent]" = Queue(maxsize=5000)      # Original (legacy/mixed)
-SCORING_QUEUE: "Queue[TelemetryEvent]" = Queue(maxsize=5000)    # For Layer 2
-GRAPH_QUEUE: "Queue[TelemetryEvent]" = Queue(maxsize=5000)      # For Layer 1
+EVENT_QUEUE: "Queue[TelemetryEvent]" = Queue(maxsize=5000)
+SCORING_QUEUE: "Queue[TelemetryEvent]" = Queue(maxsize=5000)
+GRAPH_QUEUE: "Queue[TelemetryEvent]" = Queue(maxsize=5000)
 
 @dataclass
 class TelemetryEvent:
     event_id: str
     ts: float
-    source: str               # "sysmon"
-    kind: str                 # "PROCESS_CREATE" | "FILE_CREATE" | "REG_SET"
+    source: str
+    kind: str
     session_id: str
     # common process fields
     parent_process: Optional[str] = None

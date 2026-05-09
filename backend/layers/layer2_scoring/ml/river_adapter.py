@@ -16,7 +16,6 @@ class RiverAnomalyDetector:
     def predict(self, features: dict) -> float:
         try:
             if self.model:
-                # Use actual River model
                 score = self.model.score_one(features)
                 return max(0.0, min(score, 1.0))
             else:

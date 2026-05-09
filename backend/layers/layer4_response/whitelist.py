@@ -1,9 +1,3 @@
-# backend/layers/layer4_response/whitelist.py
-"""
-Layer 4: Whitelist Service
-3-tier whitelist system for trusted software
-"""
-
 from sqlalchemy.orm import Session
 from backend.database.models import Whitelist
 from backend.database.schemas import WhitelistCreate
@@ -16,8 +10,6 @@ logger = setup_logger(__name__)
 
 
 class WhitelistService:
-    """Layer 4: Whitelist Management Service"""
-    
     @staticmethod
     def add_whitelist(
         db: Session,
@@ -57,7 +49,7 @@ class WhitelistService:
             ).first()
             
             if existing:
-                logger.warning(f"   Whitelist entry already exists: {whitelist_data.path}")
+                logger.warning(f"Whitelist entry already exists: {whitelist_data.path}")
                 return existing
             
             # Create entry
@@ -74,13 +66,13 @@ class WhitelistService:
             db.commit()
             db.refresh(whitelist)
             
-            logger.info(f"  Added whitelist (Tier {whitelist_data.tier}): {whitelist_data.path}")
+            logger.info(f"Added whitelist (Tier {whitelist_data.tier}): {whitelist_data.path}")
             return whitelist
         
         except ValidationError:
             raise
         except Exception as e:
-            logger.error(f"  Failed to add whitelist: {e}")
+            logger.error(f"Failed to add whitelist: {e}")
             db.rollback()
             raise
     
@@ -90,17 +82,6 @@ class WhitelistService:
         file_path: str,
         file_hash: str = None
     ) -> tuple:
-        """
-        Check if file is whitelisted.
-        
-        Args:
-            db: Database session
-            file_path: File path
-            file_hash: SHA256 hash (optional)
-            
-        Returns:
-            (is_whitelisted: bool, tier: int or None, reason: str)
-        """
         try:
             # Tier 1: Path-only match (highest priority - trusted locations)
             tier1 = db.query(Whitelist).filter(
@@ -143,16 +124,6 @@ class WhitelistService:
     
     @staticmethod
     def remove_whitelist(db: Session, whitelist_id: int) -> bool:
-        """
-        Remove whitelist entry.
-        
-        Args:
-            db: Database session
-            whitelist_id: Whitelist record ID
-            
-        Returns:
-            True if successful
-        """
         try:
             whitelist = db.query(Whitelist).filter(Whitelist.id == whitelist_id).first()
             
@@ -174,18 +145,6 @@ class WhitelistService:
     
     @staticmethod
     def get_whitelist_stats(db: Session) -> dict:
-        """
-        Get whitelist statistics.
-        
-        Args:
-            db: Database session
-            
-        Returns:
-            {
-                "total": int,
-                "by_tier": {...}
-            }
-        """
         try:
             total = db.query(Whitelist).count()
             

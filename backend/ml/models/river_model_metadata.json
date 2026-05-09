@@ -1,0 +1,19 @@
+{
+  "hyperparameters": {
+    "n_trees": 17,
+    "height": 10,
+    "window_size": 190,
+    "seed": 42
+  },
+  "dataset_size": 70963,
+  "benign_count": 69198,
+  "malicious_count": 1765,
+  "feature_names": [
+    "entropy",
+    "path_risk",
+    "p_matrix_score",
+    "ml_anomaly_score",
+    "parent_encoded",
+    "child_encoded"
+  ]
+}

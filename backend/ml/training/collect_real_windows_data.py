@@ -15,6 +15,7 @@ def collect_windows_telemetry(days_back: int = 30, min_samples: int = 1000):
         parent.name as parent_process,
         child.name as child_process,
         e.entropy_value as entropy,
+        child.path_risk as path_risk,
         e.p_matrix_score,
         e.ml_anomaly_score,
         e.final_severity,
@@ -43,8 +44,28 @@ def collect_windows_telemetry(days_back: int = 30, min_samples: int = 1000):
     # Label data based on final_severity
     df['label'] = df['final_severity'].apply(lambda x: 1 if x in ['CRITICAL', 'WARNING'] else 0)
     
+    # Fill missing features with sensible defaults
+    if 'path_risk' not in df.columns or df['path_risk'].isna().all():
+        print(f"  WARNING: path_risk missing/null, using default 0.0")
+        df['path_risk'] = 0.0
+    else:
+        df['path_risk'] = df['path_risk'].fillna(0.0)
+    
+    if 'p_matrix_score' not in df.columns:
+        print(f"  WARNING: p_matrix_score missing, using default 0.0")
+        df['p_matrix_score'] = 0.0
+    else:
+        df['p_matrix_score'] = df['p_matrix_score'].fillna(0.0)
+    
+    if 'ml_anomaly_score' not in df.columns:
+        print(f"  WARNING: ml_anomaly_score missing, using default 0.0")
+        df['ml_anomaly_score'] = 0.0
+    else:
+        df['ml_anomaly_score'] = df['ml_anomaly_score'].fillna(0.0)
+    
     print(f"Benign samples: {(df['label']==0).sum()}")
     print(f"Malicious samples: {(df['label']==1).sum()}")
+    print(f"Features: entropy range [{df['entropy'].min():.2f}-{df['entropy'].max():.2f}], path_risk range [{df['path_risk'].min():.2f}-{df['path_risk'].max():.2f}]")
     
     return df
 
@@ -84,8 +105,7 @@ def collect_from_feedback(min_samples: int = 500):
     print(f"False Positives: {(df['label']==0).sum()}")
     
     return df
-
-
+    
 def export_for_training(output_file: str = "windows_training_data.csv"):
     df = collect_from_feedback()
     
@@ -99,6 +119,8 @@ def export_for_training(output_file: str = "windows_training_data.csv"):
         print("Run ARGUS for at least 1 week to collect sufficient data")
         return False
     
+    output_file = r"D:\FYP\Argus\windows_training_data.csv"
+
     # Save to CSV
     df.to_csv(output_file, index=False)
     print(f"\nExported {len(df)} samples to {output_file}")
@@ -111,9 +133,6 @@ if __name__ == "__main__":
     success = export_for_training()
     
     if success:
-        print("\n" + "="*60)
-        print("  DATA COLLECTION COMPLETE")
-        print("="*60)
         print("\nNext steps:")
         print("1. Review windows_training_data.csv")
         print("2. Update train_models.py to load this CSV")

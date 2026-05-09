@@ -248,7 +248,7 @@ class RetrainingService:
             # For now: log what would happen
             logger.info("Would retrain here:")
             logger.info(f"River HalfSpaceTrees: {len(weekly_data['incidents'])} samples")
-            logger.info(f"BETH baseline: Update with {weekly_data['tp_count']} TPs")
+            logger.info(f"Windows baseline: Update with {weekly_data['tp_count']} TPs")
             logger.info(f"P-matrix: Recalibrate from {len(weekly_data['feedbacks'])} feedback")
             
             # Step 5: Validation

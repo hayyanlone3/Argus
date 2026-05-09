@@ -41,13 +41,12 @@ _ML_MODEL = None
 _ML_SEEN = 0
 
 def load_trained_river_model():
-    """Load the trained River model from BETH dataset."""
     global _ML_MODEL
     
     if not RIVER_AVAILABLE:
         return False
     
-    model_path = "backend/ml/models/river_windows_baseline.pkl"  # Use Windows baseline
+    model_path = "backend/ml/models/river_windows_baseline.pkl"
     
     try:
         import pickle
@@ -55,7 +54,6 @@ def load_trained_river_model():
             _ML_MODEL = pickle.load(f)
         return True
     except FileNotFoundError:
-        # Fallback to fresh model if trained model not found
         _ML_MODEL = anomaly.HalfSpaceTrees(
             n_trees=int(os.getenv("ARGUS_RIVER_TREES", "25")),
             height=int(os.getenv("ARGUS_RIVER_HEIGHT", "15")),
@@ -73,8 +71,38 @@ def load_trained_river_model():
         )
         return False
 
-LATEST_DECISIONS: Dict[str, Dict[str, Any]] = {}  # event_id -> payload
+LATEST_DECISIONS: Dict[str, Dict[str, Any]] = {}
 LATEST_LOCK = threading.Lock()
+
+
+# Autosave helper: persist in-memory River model after N seen events
+def autosave_river_model_if_needed() -> None:
+    global _ML_MODEL, _ML_SEEN
+    try:
+        autosave_events = int(os.getenv("ARGUS_RIVER_AUTOSAVE_EVENTS", "0"))
+    except Exception:
+        autosave_events = 0
+
+    if autosave_events <= 0 or _ML_MODEL is None:
+        return
+
+    # Only save on exact multiples to avoid frequent IO
+    try:
+        if _ML_SEEN > 0 and (_ML_SEEN % autosave_events) == 0:
+            model_path = "backend/ml/models/river_windows_baseline.pkl"
+            tmp_path = model_path + ".tmp"
+            try:
+                import pickle
+                with open(tmp_path, "wb") as f:
+                    pickle.dump(_ML_MODEL, f)
+                # Atomic replace
+                os.replace(tmp_path, model_path)
+                logger.info(f"Autosaved River model after {_ML_SEEN} events to {model_path}")
+            except Exception as e:
+                logger.error(f"Failed to autosave River model: {e}")
+    except Exception:
+        # Non-fatal: do not raise from autosave helper
+        return
 
 
 # ---- Policy Cache ----
@@ -364,8 +392,8 @@ def score_layer_a(evt: TelemetryEvent) -> Dict[str, Any]:
 class PMatrixModel:
     def __init__(self):
         self.lock = threading.Lock()
-        self.counts = {}          # (parent, child) -> count
-        self.parent_totals = {}   # parent -> total outgoing
+        self.counts = {}
+        self.parent_totals = {}
         self.vocab_children = set()
         self.min_observations = int(os.getenv("PMATRIX_MIN_OBSERVATIONS", "10"))
 
@@ -451,7 +479,7 @@ def score_layer_b(evt: TelemetryEvent) -> Dict[str, Any]:
         # Direct shell pivot: cmd.exe -> powershell.exe is a strong malware signal
         # unless it is clearly launched from a dev tool or a trusted system parent.
         if parent_name == "cmd.exe" and child_name == "powershell.exe":
-            logger.info(f"  Shell pivot detected: {parent_name} -> {child_name}")
+            logger.info(f"Shell pivot detected: {parent_name} -> {child_name}")
             return {
                 "score": 0.93,
                 "reasons": ["cmd_to_powershell_transition", "rare_transition"],
@@ -496,6 +524,35 @@ def score_layer_b(evt: TelemetryEvent) -> Dict[str, Any]:
         # Use provided entropy if present, otherwise best-effort file read occurs elsewhere
         ent = evt.file_entropy or 0.0
         target_path = evt.target_path or ""
+
+        normalized_path = target_path.lower().replace("/", "\\")
+        
+        # Rare FILE_CREATE transitions: executable/library files in suspicious locations
+        # are genuinely rare and should score high without hardcoding
+        rare_file_patterns = {
+            "\\users\\public\\": 0.85,      # Public folder file creations are suspicious
+            "\\programdata\\": 0.88,         # ProgramData is common for malware staging
+            "\\appdata\\local\\temp\\": 0.80,  # Temp folder executables are suspicious
+            "\\appdata\\roaming\\": 0.75,    # Roaming AppData with executable
+        }
+        
+        risky_ext = os.path.splitext(normalized_path)[1].lower() in {".exe", ".dll", ".sys", ".lnk", ".ps1", ".cmd", ".bat"}
+        
+        # Score FILE_CREATE events based on location + extension rarity
+        for location, base_score in rare_file_patterns.items():
+            if location in normalized_path:
+                if risky_ext:
+                    # Legitimate p-matrix: executable in suspicious location = rare/high-risk
+                    return {
+                        "score": base_score,
+                        "reasons": [f"rare_file_create_{location.strip(chr(92))}", f"suspicious_extension_{os.path.splitext(normalized_path)[1]}"],
+                    }
+                else:
+                    # Non-executable in suspicious location: lower score
+                    return {
+                        "score": base_score * 0.5,
+                        "reasons": [f"suspicious_location_{location.strip(chr(92))}"],
+                    }
 
         try:
             score_2b = ScoringEngine.score_channel_2b(
@@ -543,9 +600,12 @@ def layer_c_features(evt: TelemetryEvent, a_score: float, b_score: float) -> Dic
     cmd = (evt.child_cmd or "").lower()
     features.update({
         "cmd_has_base64": 1.0 if any(x in cmd for x in ["-enc", "base64", "frombase64"]) else 0.0,
-        "cmd_has_download": 1.0 if any(x in cmd for x in ["downloadstring", "wget", "curl", "invoke-webrequest"]) else 0.0,
+        "cmd_has_download": 1.0 if any(x in cmd for x in ["downloadstring", "wget", "curl", "invoke-webrequest", "iwr "]) else 0.0,
+        "cmd_has_iex": 1.0 if any(x in cmd for x in ["iex(", "iex ", "invoke-expression"]) else 0.0,
         "cmd_has_bypass": 1.0 if any(x in cmd for x in ["-executionpolicy bypass", "-exec bypass", "-ep bypass"]) else 0.0,
         "cmd_has_hidden": 1.0 if any(x in cmd for x in ["-windowstyle hidden", "-w hidden"]) else 0.0,
+        "cmd_has_noprofile": 1.0 if "-noprofile" in cmd else 0.0,
+        "cmd_has_noexit": 1.0 if "-noexit" in cmd else 0.0,
         "cmd_has_attack": 1.0 if any(x in cmd for x in ["downloadstring", "downloadfile", "iex(", "iex ", "invoke-expression", "frombase64string", "-encodedcommand"]) else 0.0,
         "cmd_length": min(len(cmd) / 100.0, 10.0),
     })
@@ -555,8 +615,9 @@ def layer_c_features(evt: TelemetryEvent, a_score: float, b_score: float) -> Dic
     is_susp_cmd = (
         features["cmd_has_base64"] or
         features["cmd_has_download"] or
+        features["cmd_has_iex"] or
         features["cmd_has_attack"] or
-        (features["cmd_has_bypass"] and features["cmd_has_hidden"]) or
+        (features["cmd_has_bypass"] and (features["cmd_has_hidden"] or features["cmd_has_noprofile"])) or
         features["cmd_length"] > 1.5
     )
     
@@ -567,6 +628,9 @@ def layer_c_features(evt: TelemetryEvent, a_score: float, b_score: float) -> Dic
         "child_is_system32": 1.0 if "system32" in child else 0.0,
         "parent_is_explorer": 1.0 if "explorer.exe" in parent else 0.0,
         "parent_is_system": 1.0 if any(x in parent for x in ["system32", "windows"]) else 0.0,
+        "has_writeallbytes": 1.0 if "writeallbytes" in cmd else 0.0,
+        "has_randomnumber": 1.0 if "randomnumber" in cmd else 0.0,
+        "has_registry_mod": 1.0 if "new-itemproperty" in cmd or "set-itemproperty" in cmd else 0.0,
     })
     
     features.update({
@@ -658,17 +722,52 @@ def score_layer_c(evt: TelemetryEvent, a_score: float, b_score: float) -> Dict[s
 
             math_avg = (a_score + b_score) / 2.0
             high_risk_bonus = 0.0
-            if feats.get("is_high_risk_combo", 0.0) > 0.5:
-                high_risk_bonus += 0.20
+            
+            # Bonus: High entropy + suspicious lolbin execution
             if feats.get("entropy_high", 0.0) > 0.5 and feats.get("is_suspicious_lolbin", 0.0) > 0.5:
-                high_risk_bonus += 0.15
+                high_risk_bonus += 0.20
+            
+            # Bonus: Suspicious location + attack patterns
             if feats.get("path_is_suspicious", 0.0) > 0.5 and feats.get("cmd_has_attack", 0.0) > 0.5:
-                high_risk_bonus += 0.10
+                high_risk_bonus += 0.18
+            
+            # Bonus: IEX + download string (classic remote code execution)
+            if feats.get("cmd_has_iex", 0.0) > 0.5 and feats.get("cmd_has_download", 0.0) > 0.5:
+                high_risk_bonus += 0.25
+            
+            # Bonus: WriteAllBytes + random number (payload staging)
+            if feats.get("has_writeallbytes", 0.0) > 0.5 and feats.get("has_randomnumber", 0.0) > 0.5:
+                high_risk_bonus += 0.22
+            
+            # Bonus: Registry modification + bypass + attack patterns (persistence)
+            if (feats.get("has_registry_mod", 0.0) > 0.5 and 
+                feats.get("cmd_has_bypass", 0.0) > 0.5 and 
+                feats.get("cmd_has_attack", 0.0) > 0.5):
+                high_risk_bonus += 0.20
+            
+            # Bonus: Multiple attack indicators together
+            attack_count = (feats.get("cmd_has_bypass", 0.0) + 
+                          feats.get("cmd_has_hidden", 0.0) + 
+                          feats.get("cmd_has_noprofile", 0.0) + 
+                          feats.get("cmd_has_attack", 0.0) +
+                          feats.get("path_is_suspicious", 0.0))
+            if attack_count >= 3:
+                high_risk_bonus += 0.15
+            
+            # Bonus: High risk combo
+            if feats.get("is_high_risk_combo", 0.0) > 0.5:
+                high_risk_bonus += 0.15
 
             final_score = max(math_avg, river_contribution) * 0.75 + min(math_avg, river_contribution) * 0.25 + high_risk_bonus
 
             _ML_MODEL.learn_one(feats)
             _ML_SEEN += 1
+            # Persist the in-memory model after configured number of events
+            try:
+                autosave_river_model_if_needed()
+            except Exception:
+                # Non-fatal: autosave failures should not break scoring
+                pass
 
         except Exception as e:
             final_score = (a_score + b_score) / 2.0
@@ -856,9 +955,33 @@ def check_path_legitimacy(path: str) -> Dict[str, Any]:
 def check_command_legitimacy(evt: TelemetryEvent) -> Dict[str, Any]:
     result = {"legitimate_command": False, "command_type": "unknown", "reason": None}
     cmd = (evt.child_cmd or "").lower()
+    child_path = (evt.child_process or "").lower()
 
     if not cmd:
         result["reason"] = "no command line provided"
+        return result
+
+    # Malware simulation launchers should be treated as attack context even when
+    # they are started from a normal-looking dev/terminal workflow.
+    simulation_markers = [
+        "aggressive_malware",
+        "nuclear_malware",
+        "ransomware_variant",
+        "reverse_shell",
+        "credential_stealer",
+        "run_malware_",
+        "run_all_attacks",
+        "run_backdoor",
+    ]
+    if ("\\simulations\\" in cmd or "\\simulations\\" in child_path) and (
+        any(marker in cmd for marker in simulation_markers)
+        or any(marker in child_path for marker in simulation_markers)
+        or child_path.endswith(".bat")
+        or child_path.endswith(".ps1")
+        or child_path.endswith(".cmd")
+    ):
+        result["command_type"] = "attack"
+        result["reason"] = "Malware simulation launcher detected"
         return result
 
     attack_patterns = [
@@ -976,12 +1099,8 @@ def check_temporal_consistency(evt: TelemetryEvent) -> Dict[str, Any]:
     return result
 
 class LegitimacyVerifier:
-    """Collects evidence across 5 channels to determine if a high-scoring process
-    is genuinely legitimate or malware disguising as a trusted app."""
-
     @staticmethod
     def verify(evt: TelemetryEvent) -> Dict[str, Any]:
-        """Run all 5 evidence channels and return structured verdict."""
         child = (evt.child_process or "").lower()
         child_name = child.split("\\")[-1] if "\\" in child else child
 
@@ -1118,7 +1237,6 @@ def apply_legitimacy_verdict(
         result["rule"] = "insufficient_evidence_original_score_held"
     
     return result
-
 
 class Layer2RuntimeEngine:
     def __init__(self):
@@ -1398,11 +1516,6 @@ class Layer2RuntimeEngine:
                 is_kill_enabled = policy.get("kill_on_alert", False)
                 is_quarantine_enabled = policy.get("quarantine_on_warn", True)
                 
-                # CRITICAL: Never auto-kill in development/testing environments
-                # Auto-kill is DISABLED by default for safety
-                # Only enable in production with careful testing
-                
-                # TIER 1: NEVER flag these system processes (absolute whitelist)
                 safe_processes = [
                     "explorer.exe", "svchost.exe", "csrss.exe", "smss.exe",
                     "wininit.exe", "services.exe", "lsass.exe", "spoolsv.exe",

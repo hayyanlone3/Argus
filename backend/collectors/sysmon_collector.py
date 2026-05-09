@@ -12,7 +12,6 @@ import os
 
 logger = setup_logger(__name__)
 
-# Event IDs we care about
 EV_PROCESS_CREATE = 1
 EV_FILE_CREATE = 11
 EV_REG_SET = 12
@@ -102,7 +101,6 @@ class SysmonCollector:
             logger.debug(f"[COLLECTOR] Failed to save RID: {e}")
 
     def _open_query(self):
-        """Open a forward-direction query filtered to events after last_rid."""
         if self._last_record_id and self._last_record_id > 0:
             query_str = f"*[System[(EventRecordID > {self._last_record_id}) and Provider/@Name='{PROVIDER_NAME}']]"
         else:
@@ -237,7 +235,7 @@ class SysmonCollector:
             self.enabled = False
             return
 
-        logger.info("[COLLECTOR] 🎯 READY - Waiting for new malware activity...")
+        logger.info("[COLLECTOR] READY - Waiting for new malware activity...")
 
         while not self._stop.is_set():
             try:
@@ -320,7 +318,6 @@ class SysmonCollector:
             proc_guid = data.get("ProcessGuid")
             parent_guid = data.get("ParentProcessGuid")
             
-            # Publish event immediately (no logging to reduce noise)
             publish_event(TelemetryEvent(
                 event_id=new_event_id(),
                 ts=time.time(),
@@ -345,11 +342,9 @@ class SysmonCollector:
             pid = data.get("ProcessId")
             proc_guid = data.get("ProcessGuid")
             
-            # Skip known legitimate temporary files
             if "__psscriptpolicytest_" in path.lower():
                 return
             
-            # Publish event (no logging)
             publish_event(TelemetryEvent(
                 event_id=new_event_id(),
                 ts=time.time(),

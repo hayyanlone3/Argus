@@ -1,5 +1,3 @@
-# backend/layers/layer2_scoring/ml/p_matrix.py
-
 from shared.logger import setup_logger
 import numpy as np
 from scipy.stats import norm
@@ -16,10 +14,8 @@ def calculate_p_matrix(process_behavior: dict, baseline: dict) -> float:
         if spawn_std == 0:
             return 0.5
         
-        # Z-score for spawn count
         z = (spawn_count - spawn_mean) / spawn_std
         
-        # P-value from normal distribution
         p_value = 2 * (1 - norm.cdf(abs(z)))
         
         logger.debug(f"P-Matrix: spawn_count={spawn_count}, p={p_value:.6f}")

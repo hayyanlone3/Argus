@@ -1,0 +1,13 @@
+{
+  "best_iteration": 1,
+  "config": {
+    "n_trees": 17,
+    "height": 10,
+    "window_size": 190,
+    "seed": 42
+  },
+  "roc_auc": 0.8477,
+  "pr_auc": 0.1617,
+  "training_time_sec": 4.0,
+  "justification": "Best config from RandomizedSearchCV with 3 iterations on 15% subsampled data. Trades slightly lower tree complexity (height=10 vs default 15) for faster training/inference while maintaining excellent discrimination (ROC AUC 0.8477 vs baseline 0.8121) and improved PR AUC (0.1617 vs baseline 0.1005)."
+}

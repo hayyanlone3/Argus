@@ -87,10 +87,6 @@ async def lifespan(app: FastAPI):
         # Not needed for real-time detection
         logger.info("Learning scheduler: Disabled (not needed for real-time detection)")
 
-        logger.info("=" * 80)
-        logger.info("✅ ARGUS READY FOR REAL-TIME DETECTION")
-        logger.info("=" * 80)
-
     except Exception as e:
         logger.error(f"Startup failed: {e}")
         sys.exit(1)

@@ -21,7 +21,6 @@ router = APIRouter()
 
 @router.get("/health")
 async def health():
-    """Layer 4: Response Engine health check."""
     return {
         "layer": 4,
         "name": "Response Engine",
@@ -40,18 +39,6 @@ async def quarantine_file(
     quarantine_data: QuarantineCreate,
     db: Session = Depends(get_db)
 ):
-    """
-    Quarantine a suspicious file.
-    
-    Example:
-        POST /api/layer4/quarantine
-        {
-            "original_path": "C:\\malware.exe",
-            "hash_sha256": "abc123...",
-            "detection_layer": "Layer0_Bouncer",
-            "confidence": 0.95
-        }
-    """
     try:
         quarantine = QuarantineService.quarantine_file(
             quarantine_data.original_path,
